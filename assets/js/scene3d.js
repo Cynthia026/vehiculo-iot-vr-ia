@@ -99,6 +99,7 @@ export class Scene3DManager {
     }
 
     setModoConsolaVR(activo) {
+        this._enConsolaVR = Boolean(activo);
         if (activo) {
             this.defaultCamPos.set(3.2, 3.65, 4.45);
             this.defaultTarget.set(0.45, 0.32, 0.55);
@@ -106,6 +107,8 @@ export class Scene3DManager {
             this.defaultCamPos.set(2.9, 2.8, 3.8);
             this.defaultTarget.set(0, 0.4, 0);
         }
+        this._ajustarEncuadre();
+        this.camera.updateProjectionMatrix();
         this.resetCamera();
     }
 
@@ -135,17 +138,20 @@ export class Scene3DManager {
         }
     }
 
-    // En celular vertical los controles ocupan la parte alta: se baja el modelo al espacio libre
+    // En celular vertical los controles quedan en la parte inferior y el modelo 3D se encuadra arriba en la ventana libre
     _ajustarEncuadre() {
         const w = window.innerWidth, h = window.innerHeight;
-        if (w / h < 1) this.camera.setViewOffset(w, h, 0, -h * 0.2, w, h);
-        else this.camera.clearViewOffset();
+        if (w / h < 1 && !this._enConsolaVR) {
+            this.camera.setViewOffset(w, h, 0, h * 0.24, w, h);
+        } else {
+            this.camera.clearViewOffset();
+        }
     }
 
     // En pantallas verticales (celular) la cámara se aleja para que la excavadora quepa completa
     _camPosParaPantalla() {
         const aspect = window.innerWidth / window.innerHeight;
-        return this.defaultCamPos.clone().multiplyScalar(aspect < 1 ? 1.75 : 1);
+        return this.defaultCamPos.clone().multiplyScalar(aspect < 1 ? 1.55 : 1);
     }
 
     _initLights() {

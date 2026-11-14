@@ -88,10 +88,10 @@ async function inicializar() {
         let vrManager = null;
         let consola3d = null;
         try {
-            const { Scene3DManager } = await import('./scene3d.js?v=25');
-            const { VRManager } = await import('./vr-controls.js?v=25');
-            const { Consola3D } = await import('./botones3d.js?v=25');
-            const { VRCelular, vrCelularDisponible } = await import('./vr-celular.js?v=25');
+            const { Scene3DManager } = await import('./scene3d.js?v=27');
+            const { VRManager } = await import('./vr-controls.js?v=27');
+            const { Consola3D } = await import('./botones3d.js?v=27');
+            const { VRCelular, vrCelularDisponible } = await import('./vr-celular.js?v=27');
             scene3d = new Scene3DManager('three-canvas');
 
             const callbacksBotones = {
