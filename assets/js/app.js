@@ -1,11 +1,11 @@
 // assets/js/app.js
-import { api } from './api.js?v=24';
-import { wsManager } from './websocket.js?v=24';
-import { ui, normalizar } from './ui.js?v=26';
-import { CONFIG } from './config.js?v=24';
-import { adminManager } from './admin.js?v=24';
-import { ControlVoz, ControlGestos, ControlGiroscopio } from './control-ia.js?v=24';
-import { AsistenteIA, describirPaso } from './asistente-ia.js?v=24';
+import { api } from './api.js?v=28';
+import { wsManager } from './websocket.js?v=28';
+import { ui, normalizar } from './ui.js?v=28';
+import { CONFIG } from './config.js?v=28';
+import { adminManager } from './admin.js?v=28';
+import { ControlVoz, ControlGestos, ControlGiroscopio } from './control-ia.js?v=28';
+import { AsistenteIA, describirPaso } from './asistente-ia.js?v=28';
 
 let catalogoComandos = [];
 let idComandoDetener = null;
@@ -88,10 +88,10 @@ async function inicializar() {
         let vrManager = null;
         let consola3d = null;
         try {
-            const { Scene3DManager } = await import('./scene3d.js?v=27');
-            const { VRManager } = await import('./vr-controls.js?v=27');
-            const { Consola3D } = await import('./botones3d.js?v=27');
-            const { VRCelular, vrCelularDisponible } = await import('./vr-celular.js?v=27');
+            const { Scene3DManager } = await import('./scene3d.js?v=28');
+            const { VRManager } = await import('./vr-controls.js?v=28');
+            const { Consola3D } = await import('./botones3d.js?v=28');
+            const { VRCelular, vrCelularDisponible } = await import('./vr-celular.js?v=28');
             scene3d = new Scene3DManager('three-canvas');
 
             const callbacksBotones = {

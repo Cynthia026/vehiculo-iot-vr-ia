@@ -142,7 +142,7 @@ export class Scene3DManager {
     _ajustarEncuadre() {
         const w = window.innerWidth, h = window.innerHeight;
         if (w / h < 1 && !this._enConsolaVR) {
-            this.camera.setViewOffset(w, h, 0, h * 0.24, w, h);
+            this.camera.setViewOffset(w, h, 0, h * 0.21, w, h);
         } else {
             this.camera.clearViewOffset();
         }
@@ -151,7 +151,7 @@ export class Scene3DManager {
     // En pantallas verticales (celular) la cámara se aleja para que la excavadora quepa completa
     _camPosParaPantalla() {
         const aspect = window.innerWidth / window.innerHeight;
-        return this.defaultCamPos.clone().multiplyScalar(aspect < 1 ? 1.55 : 1);
+        return this.defaultCamPos.clone().multiplyScalar(aspect < 1 ? 1.48 : 1);
     }
 
     _initLights() {

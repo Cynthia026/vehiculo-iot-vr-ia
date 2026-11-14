@@ -6,7 +6,7 @@
 // - Librerías de CDN y modelo de IA (URLs con versión fija): primero la copia guardada.
 // - API del vehículo, WebSocket y API de Claude: nunca se guardan.
 
-const VERSION = 'v3';
+const VERSION = 'v4';
 const CACHE_APP = `vehiculo-iot-app-${VERSION}`;
 const CACHE_CDN = `vehiculo-iot-cdn-${VERSION}`;
 

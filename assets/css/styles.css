@@ -1833,44 +1833,85 @@ body.vr-mode-pc #vista-control .area-ia.con-modo .ia-cab {
     white-space: nowrap;
 }
 
+.admin-jwt-details summary {
+    cursor: pointer;
+    padding: .35rem .65rem;
+    border-radius: 10px;
+    background: rgba(15, 23, 42, 0.6);
+    border: 1px solid rgba(56, 189, 248, 0.25);
+    font-size: .74rem;
+    color: #bae6fd;
+    list-style: none;
+    user-select: none;
+}
+.admin-jwt-details summary::-webkit-details-marker {
+    display: none;
+}
+
 /* =====================================================================
    RESPONSIVO PARA CELULAR VERTICAL (PORTRAIT: max-width 767px)
+   - En Vista Control: cabe 100% dentro de 100dvh sin cortarse abajo y
+     deja una ventana libre (hint) para ver y rotar la Excavadora 3D.
+   - En Monitoreo y Administración: permite scroll táctil completo.
+   - Todos los indicadores (Iniciar Sesión, Simulación, WSS, AWS, RDS)
+     hacen wrap en pantalla para verse completos sin recortes.
    ===================================================================== */
 @media (max-width: 767px) {
-    html, body {
+    /* En Vista Control bloqueamos a 100dvh exactos para que nada se corte abajo */
+    html:has(body[data-view="control"]),
+    body[data-view="control"] {
+        height: 100dvh !important;
+        max-height: 100dvh !important;
+        overflow-x: hidden !important;
+        overflow-y: hidden !important;
+    }
+
+    /* En Monitoreo y Administración activamos scroll táctil libre */
+    html:has(body[data-view="monitoreo"]),
+    body[data-view="monitoreo"],
+    html:has(body[data-view="admin"]),
+    body[data-view="admin"] {
         height: auto !important;
         min-height: 100dvh !important;
         max-height: none !important;
         overflow-x: hidden !important;
         overflow-y: auto !important;
     }
+    body[data-view="monitoreo"] .app-main,
+    body[data-view="admin"] .app-main {
+        overflow: visible !important;
+        height: auto !important;
+        pointer-events: auto !important;
+    }
 
+    /* Encabezado compacto con TODOS los indicadores visibles (wrap limpio) */
     .app-header {
-        padding: calc(.3rem + env(safe-area-inset-top, 0)) .55rem .3rem;
-        gap: .28rem .4rem;
+        padding: calc(.22rem + env(safe-area-inset-top, 0)) .48rem .22rem !important;
+        gap: .2rem .35rem !important;
+        flex-wrap: wrap !important;
     }
 
     .app-title {
         width: 100%;
         justify-content: space-between;
-        gap: .4rem;
+        gap: .35rem;
     }
     .app-title-icon {
-        width: 30px;
-        height: 30px;
+        width: 24px;
+        height: 24px;
+        border-radius: 7px;
     }
     .app-title h1 {
-        font-size: .88rem;
+        font-size: .82rem;
     }
     .app-title small {
-        font-size: .62rem;
-        display: block;
+        display: none !important;
     }
     .header-unit-select {
         margin-left: auto;
         max-width: 175px;
-        font-size: .68rem;
-        padding: .18rem .5rem;
+        font-size: .65rem;
+        padding: .14rem .45rem;
     }
 
     /* Pestañas a lo ancho en una fila limpia */
@@ -1878,197 +1919,259 @@ body.vr-mode-pc #vista-control .area-ia.con-modo .ia-cab {
         width: 100%;
         display: grid;
         grid-template-columns: repeat(3, 1fr);
-        padding: .18rem;
-        gap: .18rem;
+        padding: .14rem;
+        gap: .15rem;
     }
     .app-tab {
         width: 100%;
-        padding: .26rem .35rem;
-        font-size: .7rem;
-        gap: .25rem;
+        padding: .2rem .28rem;
+        font-size: .68rem;
+        gap: .22rem;
     }
 
-    /* Barra de acciones y estado en una sola tira horizontal deslizable */
+    /* Acciones + Indicadores de estado con wrap visible en pantalla */
     .header-right {
         width: 100%;
-        flex-wrap: nowrap;
-        overflow-x: auto;
-        scrollbar-width: none;
-        -webkit-overflow-scrolling: touch;
-        gap: .3rem;
-        padding-bottom: .05rem;
-    }
-    .header-right::-webkit-scrollbar {
-        display: none;
+        flex-wrap: wrap !important;
+        overflow: visible !important;
+        justify-content: flex-start;
+        gap: .2rem .24rem;
     }
     .btn-header-pill {
         flex: 0 0 auto;
-        padding: .22rem .5rem;
-        font-size: .64rem;
+        padding: .16rem .42rem;
+        font-size: .6rem;
     }
     #btn-reset-cam span,
     .btn-asistente span {
         display: inline;
     }
     .status-group {
-        flex-wrap: nowrap;
-        flex: 0 0 auto;
-        gap: .25rem;
+        display: contents;
     }
     .status-group .badge {
-        flex: 0 0 auto;
-        font-size: .6rem;
-        padding: .22rem .45rem;
+        flex: 0 1 auto;
+        font-size: .54rem;
+        padding: .15rem .36rem;
+        white-space: nowrap;
     }
 
     .app-main {
-        overflow: visible !important;
-        padding: .4rem .5rem .6rem;
+        flex: 1 1 auto;
+        min-height: 0;
+        overflow: hidden;
+        padding: .28rem .45rem;
     }
 
     /* Vista Control en Celular Vertical:
-       Ventana superior libre (hint) para ver y rotar la Excavadora 3D,
-       seguida de Accesorios, Cruces (Brazo | Movimiento), IA y Demos */
+       Cabe 100% en 100dvh. La fila "hint" (1fr) se adapta automáticamente
+       dejando una ventana despejada arriba para ver y girar la Excavadora 3D,
+       y abajo se muestran Accesorios, Cruces (Brazo | Movimiento), IA y Demos completas. */
     .vista-control {
+        height: 100%;
+        min-height: 0;
         grid-template-columns: 1fr 1fr;
-        grid-template-rows: minmax(145px, 21dvh) auto auto auto auto;
+        grid-template-rows: minmax(65px, 1fr) auto auto auto auto;
         grid-template-areas:
             "hint  hint"
             "acc   acc"
             "arm   drive"
             "ia    ia"
             "demo  demo";
-        gap: .42rem;
+        gap: .26rem;
+        align-items: stretch;
     }
 
-    /* En Modo VR en celular vertical la ventana 3D ocupa toda la pantalla */
     body.vr-mode-pc .vista-control {
-        grid-template-rows: minmax(68dvh, 1fr);
+        grid-template-rows: 1fr;
     }
 
     .panel {
-        padding: .5rem .6rem;
-        border-radius: 16px;
+        padding: .34rem .48rem;
+        border-radius: 13px;
     }
     .panel-title {
-        font-size: .76rem;
-        margin-bottom: .35rem;
+        font-size: .68rem;
+        margin-bottom: .2rem;
     }
 
-    /* Accesorios compactos */
+    /* Accesorios compactos en 1 fila */
+    .area-acc {
+        padding: .28rem .42rem;
+    }
+    .area-acc .panel-title {
+        display: none;
+    }
     .commands-grid {
-        gap: .38rem;
+        gap: .3rem;
     }
     .cmd-btn {
-        min-height: 46px;
-        padding: .32rem .35rem;
-        font-size: .72rem;
+        min-height: 34px;
+        height: 34px;
+        padding: .2rem .3rem;
+        font-size: .68rem;
         flex-direction: row;
-        gap: .35rem;
-        border-radius: 12px;
-        --canto: 4px;
+        gap: .28rem;
+        border-radius: 10px;
+        --canto: 3px;
     }
     .cmd-ico {
-        width: 1.75rem;
-        height: 1.75rem;
-        font-size: .92rem;
+        width: 1.45rem;
+        height: 1.45rem;
+        font-size: .82rem;
+        border-radius: 6px;
+    }
+
+    /* Cruces direccionales (Brazo y Movimiento) proporcionales al alto disponible */
+    .pad-panel {
+        padding: .32rem .35rem;
+        gap: .22rem;
+        justify-content: space-between;
+        min-height: 0;
+    }
+    .pad-panel .pad-title {
+        font-size: .66rem;
+        margin: 0;
+    }
+    .dpad-grid {
+        width: clamp(82px, 13.5dvh, 114px);
+        max-width: 100%;
+        aspect-ratio: 1 / 1;
+        gap: .18rem;
+        padding-bottom: 2px;
+        margin: 0 auto;
+    }
+    .dir-btn {
+        font-size: .48rem;
+        border-radius: 8px;
+        padding: .1rem;
+        gap: .05rem;
+        --canto: 3px;
+    }
+    .dir-btn i {
+        font-size: .88rem;
+    }
+    .dpad-center {
+        font-size: .82rem;
         border-radius: 8px;
     }
 
-    /* Cruces direccionales (Brazo y Movimiento) */
-    .pad-panel {
-        padding: .5rem .4rem;
-        gap: .4rem;
-        justify-content: space-between;
-    }
-    .pad-panel .pad-title {
-        font-size: .74rem;
-    }
-    .dpad-grid {
-        max-width: 138px;
-        gap: .24rem;
-        padding-bottom: 4px;
-    }
-    .dir-btn {
-        font-size: .54rem;
-        border-radius: 10px;
-        padding: .15rem;
-        --canto: 4px;
-    }
-    .dir-btn i {
-        font-size: 1.05rem;
-    }
-    .dpad-center {
-        font-size: .95rem;
-        border-radius: 10px;
-    }
-
-    /* Velocímetro y botón Detener */
+    /* Velocímetro en 1 línea y botón Detener compacto */
     .velocimetro {
-        padding: .26rem .45rem;
-        border-radius: 10px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: .16rem .38rem;
+        border-radius: 8px;
+    }
+    .velocimetro .velo-cab,
+    .velocimetro .velo-barra,
+    .velocimetro .velo-estado {
+        display: none;
+    }
+    .velocimetro .velo-top {
+        order: 2;
+    }
+    .velocimetro .velo-valor {
+        margin: 0;
     }
     .velo-valor span {
-        font-size: 1.05rem;
+        font-size: .92rem;
+    }
+    .velo-valor small {
+        font-size: .6rem;
     }
     .velo-modo {
-        font-size: .56rem;
-        padding: .08rem .35rem;
+        font-size: .52rem;
+        padding: .06rem .32rem;
     }
     .btn-stop {
-        min-height: 38px;
-        font-size: .86rem;
-        border-radius: 11px;
-        --canto: 4px;
-    }
-
-    /* Control con IA */
-    .area-ia {
-        padding: .42rem .55rem;
-    }
-    .ia-modos {
-        gap: .35rem;
-    }
-    .ia-btn {
-        min-height: 36px;
-        font-size: .7rem;
-        border-radius: 11px;
+        min-height: 28px;
+        height: 28px;
+        font-size: .74rem;
+        border-radius: 8px;
+        margin-top: 0;
         --canto: 3px;
     }
+    .btn-stop i {
+        font-size: .88rem;
+    }
 
-    /* Secuencias Demo completas y visibles */
-    .area-demo .panel-title {
-        margin-bottom: .3rem;
+    /* Control con IA compacto */
+    .area-ia {
+        padding: .26rem .42rem;
+        gap: .22rem;
+    }
+    .area-ia .ia-cab,
+    .area-ia .ia-estado {
+        display: none;
+    }
+    .ia-modos {
+        gap: .28rem;
+    }
+    .ia-btn {
+        min-height: 28px;
+        height: 28px;
+        font-size: .64rem;
+        border-radius: 9px;
+        --canto: 2px;
+    }
+    .area-ia .ia-camara {
+        max-height: 86px;
+    }
+    .area-ia .ia-giro {
+        padding: .25rem .4rem;
+    }
+
+    /* Secuencias Demo en 1 sola línea horizontal para que NUNCA se corte abajo */
+    .area-demo {
+        padding: .28rem .42rem;
+    }
+    .area-demo .panel-title,
+    .area-demo .demo-caption {
+        display: none;
     }
     .demo-row {
-        grid-template-columns: 1fr;
-        gap: .38rem;
+        grid-template-columns: minmax(0, 1fr) 152px;
+        gap: .28rem;
+        align-items: center;
     }
     .demo-select {
-        min-height: 36px;
-        font-size: .78rem;
-        padding-left: 2.1rem;
+        min-height: 30px;
+        height: 30px;
+        padding-top: 0;
+        padding-bottom: 0;
+        padding-left: 1.85rem;
+        font-size: .68rem;
+        border-radius: 8px;
+    }
+    .demo-picker > i {
+        left: .55rem;
+        font-size: .84rem;
     }
     .demo-actions {
         grid-template-columns: 1fr 1fr;
-        gap: .38rem;
+        gap: .24rem;
     }
     .btn-demo {
-        min-height: 36px;
-        font-size: .78rem;
-        border-radius: 10px;
-        --canto: 3px;
+        min-height: 30px;
+        height: 30px;
+        font-size: .66rem;
+        padding: 0 .35rem;
+        border-radius: 8px;
+        --canto: 2px;
     }
 
     /* Vista Monitoreo en Celular Vertical */
     .vista-monitoreo {
-        gap: .55rem;
+        gap: .5rem;
+        padding-bottom: .6rem;
     }
     .monitor-last-card {
-        padding: .65rem .8rem;
+        padding: .6rem .75rem;
     }
     .monitor-history-card {
-        padding: .65rem .75rem;
+        padding: .6rem .7rem;
         min-height: 260px;
     }
     .monitor-table-container {
@@ -2076,33 +2179,71 @@ body.vr-mode-pc #vista-control .area-ia.con-modo .ia-cab {
     }
 
     /* Vista Administración en Celular Vertical */
+    .vista-admin {
+        gap: .55rem;
+        padding-bottom: .8rem;
+    }
     .vista-admin .panel {
-        padding: .65rem .7rem;
+        padding: .6rem .65rem;
         overflow: hidden;
+    }
+    .admin-role-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: .38rem;
+    }
+    .role-profile-card {
+        padding: .48rem .55rem;
+        gap: .45rem;
+    }
+    .role-profile-ico {
+        width: 30px;
+        height: 30px;
+        font-size: .92rem;
+    }
+    .role-profile-card strong {
+        font-size: .72rem;
+    }
+    .role-profile-card small {
+        font-size: .62rem;
     }
     .admin-metrics-grid {
         grid-template-columns: repeat(2, minmax(0, 1fr));
-        gap: .45rem;
+        gap: .4rem;
     }
     .admin-metric-card {
-        padding: .55rem .65rem;
+        padding: .48rem .58rem;
+        gap: .45rem;
+    }
+    .metric-icon {
+        width: 32px;
+        height: 32px;
+        font-size: .95rem;
     }
     .metric-value {
-        font-size: 1.15rem;
+        font-size: 1.05rem;
+    }
+    .admin-table-wrap .monitor-table th,
+    .admin-table-wrap .monitor-table td {
+        padding: .35rem .45rem;
+        font-size: .68rem;
     }
 
     .app-footer {
-        padding: .35rem .5rem;
-        font-size: .62rem;
+        padding: .16rem .45rem;
+        font-size: .54rem;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
     }
 }
 
 /* =====================================================================
-   RESPONSIVO PARA CELULAR EN HORIZONTAL (LANDSCAPE: max-height 560px)
+   RESPONSIVO PARA CELULAR EN HORIZONTAL (LANDSCAPE: max-height 620px)
    Sobrescribe cualquier regla de escritorio (min-width: 768px) para que
-   nada se corte ni tape la Excavadora 3D en el centro.
+   todos los indicadores se vean completos, ningún botón se corte y la
+   Excavadora 3D luzca despejada en el centro.
    ===================================================================== */
-@media (max-height: 560px) and (orientation: landscape) {
+@media (max-height: 620px) and (orientation: landscape) {
     html, body {
         height: 100dvh !important;
         max-height: 100dvh !important;
@@ -2116,6 +2257,7 @@ body.vr-mode-pc #vista-control .area-ia.con-modo .ia-cab {
     html:has(body[data-view="admin"]),
     body[data-view="admin"] {
         height: auto !important;
+        min-height: 100dvh !important;
         max-height: none !important;
         overflow-y: auto !important;
     }
@@ -2126,102 +2268,109 @@ body.vr-mode-pc #vista-control .area-ia.con-modo .ia-cab {
         pointer-events: auto !important;
     }
 
-    /* Encabezado de 1 sola fila compacta y deslizable en Landscape */
+    /* Encabezado compacto con wrap para que TODOS los indicadores (WSS, AWS, RDS) sean visibles */
     .app-header {
-        padding: .18rem .55rem !important;
-        gap: .3rem .45rem !important;
-        flex-wrap: nowrap !important;
-        overflow-x: auto;
-        scrollbar-width: none;
-    }
-    .app-header::-webkit-scrollbar {
-        display: none;
+        padding: .15rem .5rem !important;
+        gap: .15rem .35rem !important;
+        flex-wrap: wrap !important;
+        overflow: visible !important;
     }
     .app-title {
-        flex: 0 0 auto;
-        flex-wrap: nowrap;
-        gap: .35rem;
+        width: auto !important;
+        flex: 0 1 auto !important;
+        flex-wrap: nowrap !important;
+        gap: .3rem !important;
     }
     .app-title-icon {
-        width: 24px !important;
-        height: 24px !important;
+        width: 22px !important;
+        height: 22px !important;
+        border-radius: 6px !important;
     }
     .app-title h1 {
-        font-size: .76rem !important;
+        font-size: .74rem !important;
         white-space: nowrap;
     }
     .app-title small {
         display: none !important;
     }
     .header-unit-select {
-        max-width: 138px;
-        font-size: .62rem;
-        padding: .12rem .4rem;
+        margin-left: .2rem !important;
+        max-width: 138px !important;
+        font-size: .6rem !important;
+        padding: .1rem .36rem !important;
     }
 
     .app-tabs {
-        flex: 0 0 auto;
-        padding: .12rem;
-        gap: .15rem;
+        width: auto !important;
+        display: inline-flex !important;
+        flex: 0 0 auto !important;
+        padding: .1rem !important;
+        gap: .12rem !important;
     }
     .app-tab {
-        padding: .16rem .5rem !important;
-        font-size: .64rem !important;
+        width: auto !important;
+        padding: .14rem .44rem !important;
+        font-size: .62rem !important;
         white-space: nowrap;
     }
 
     .header-right {
-        flex: 0 0 auto;
-        flex-wrap: nowrap !important;
-        gap: .25rem;
+        width: auto !important;
+        flex: 1 1 auto !important;
+        flex-wrap: wrap !important;
+        justify-content: flex-end !important;
+        gap: .16rem .22rem !important;
+        overflow: visible !important;
     }
     .btn-header-pill {
-        padding: .14rem .42rem !important;
-        font-size: .58rem !important;
+        padding: .12rem .38rem !important;
+        font-size: .56rem !important;
         white-space: nowrap;
     }
     .status-group {
-        flex-wrap: nowrap !important;
-        gap: .2rem;
+        display: contents !important;
     }
     .status-group .badge {
-        font-size: .54rem !important;
-        padding: .14rem .36rem !important;
+        font-size: .52rem !important;
+        padding: .12rem .32rem !important;
         white-space: nowrap;
     }
 
-    /* Ocultar footer en Landscape para aprovechar toda la altura útil */
+    /* Ocultar footer en Landscape para dar máxima altura útil a los paneles */
     .app-footer {
         display: none !important;
     }
 
     .app-main {
-        padding: .25rem .5rem !important;
+        padding: .2rem .45rem !important;
         overflow: hidden;
+        min-height: 0 !important;
     }
 
     /* Distribución de Vista Control en Landscape:
-       - Columna izquierda (168px): Brazo y motores arriba + IA abajo (sin encimarse)
-       - Columna central (1fr): Accesorios compactos arriba + Centro libre para el 3D + Demos compactas abajo
-       - Columna derecha (178px): Movimiento + Velocímetro + Detener (completos dentro del panel) */
+       - Columna izquierda: Brazo y motores arriba + IA abajo (sin encimarse)
+       - Columna central: Accesorios ultra-compactos arriba + Centro libre para el 3D + Demos en 1 línea abajo
+       - Columna derecha: Movimiento + Velocímetro + Detener (ajustados con dvh para que nunca se corten) */
     .vista-control {
-        grid-template-columns: 168px minmax(0, 1fr) 178px !important;
-        grid-template-rows: auto 1fr auto !important;
+        height: 100% !important;
+        min-height: 0 !important;
+        grid-template-columns: clamp(138px, 21vw, 166px) minmax(0, 1fr) clamp(148px, 22vw, 176px) !important;
+        grid-template-rows: auto minmax(40px, 1fr) auto !important;
         grid-template-areas:
             "arm  acc   drive"
             "arm  hint  drive"
             "ia   demo  drive" !important;
-        gap: .3rem .45rem !important;
+        gap: .22rem .4rem !important;
         align-items: stretch !important;
     }
 
     .panel {
-        padding: .28rem .42rem !important;
-        border-radius: 12px !important;
+        padding: .22rem .36rem !important;
+        border-radius: 11px !important;
     }
     .panel-title {
-        font-size: .64rem !important;
-        margin: 0 0 .18rem !important;
+        font-size: .58rem !important;
+        margin: 0 0 .12rem !important;
     }
 
     /* Izquierda arriba: Brazo y motores */
@@ -2229,149 +2378,159 @@ body.vr-mode-pc #vista-control .area-ia.con-modo .ia-cab {
         grid-row: 1 / 3 !important;
         align-self: stretch !important;
         justify-content: center !important;
-        padding: .25rem .3rem !important;
-        gap: .18rem !important;
+        padding: .18rem .26rem !important;
+        gap: .12rem !important;
+        min-height: 0 !important;
+        overflow: hidden !important;
     }
 
-    /* Izquierda abajo: Control con IA */
+    /* Izquierda abajo: Control con IA en 1 fila de 3 botones */
     .area-ia {
         grid-row: 3 !important;
         align-self: end !important;
-        padding: .24rem .3rem !important;
-        gap: .2rem !important;
+        padding: .18rem .26rem !important;
+        gap: .15rem !important;
     }
     .area-ia .ia-cab,
     .area-ia .ia-estado {
         display: none !important;
     }
     .ia-modos {
-        gap: .2rem !important;
+        gap: .16rem !important;
     }
     .ia-btn {
-        min-height: 28px !important;
-        padding: .15rem .18rem !important;
-        font-size: .56rem !important;
-        flex-direction: column !important;
-        gap: .05rem !important;
-        border-radius: 8px !important;
+        min-height: 24px !important;
+        height: 24px !important;
+        padding: .1rem .15rem !important;
+        font-size: .52rem !important;
+        flex-direction: row !important;
+        gap: .14rem !important;
+        border-radius: 7px !important;
         --canto: 2px !important;
     }
     .ia-btn i {
-        font-size: .78rem !important;
+        font-size: .68rem !important;
     }
 
-    /* Centro arriba: Accesorios ultra-compactos para dejar ver la Excavadora 3D en el centro */
+    /* Centro arriba: Accesorios ultra-compactos */
     .area-acc {
         align-self: start !important;
         justify-self: center !important;
-        width: min(100%, 420px) !important;
-        padding: .22rem .38rem !important;
+        width: min(100%, 380px) !important;
+        padding: .18rem .32rem !important;
     }
     .area-acc .panel-title {
         display: none !important;
     }
     .commands-grid {
-        gap: .28rem !important;
+        gap: .24rem !important;
     }
     .cmd-btn {
-        min-height: 30px !important;
-        height: 30px !important;
-        padding: .15rem .35rem !important;
-        font-size: .64rem !important;
+        min-height: 26px !important;
+        height: 26px !important;
+        padding: .12rem .3rem !important;
+        font-size: .6rem !important;
         flex-direction: row !important;
-        gap: .28rem !important;
-        border-radius: 9px !important;
+        gap: .24rem !important;
+        border-radius: 8px !important;
         --canto: 2px !important;
     }
     .cmd-ico {
-        width: 1.35rem !important;
-        height: 1.35rem !important;
-        font-size: .76rem !important;
-        border-radius: 6px !important;
+        width: 1.2rem !important;
+        height: 1.2rem !important;
+        font-size: .7rem !important;
+        border-radius: 5px !important;
     }
 
     /* Centro abajo: Secuencias demo en 1 sola línea compacta */
     .area-demo {
         align-self: end !important;
         justify-self: center !important;
-        width: min(100%, 460px) !important;
-        padding: .22rem .38rem !important;
+        width: min(100%, 430px) !important;
+        padding: .18rem .32rem !important;
     }
     .area-demo .panel-title,
     .area-demo .demo-caption {
         display: none !important;
     }
     .demo-row {
-        grid-template-columns: minmax(0, 1fr) 156px !important;
-        gap: .28rem !important;
+        grid-template-columns: minmax(0, 1fr) 142px !important;
+        gap: .24rem !important;
         align-items: center !important;
     }
     .demo-select {
-        min-height: 28px !important;
-        height: 28px !important;
+        min-height: 25px !important;
+        height: 25px !important;
         padding-top: 0 !important;
         padding-bottom: 0 !important;
-        padding-left: 1.85rem !important;
-        font-size: .66rem !important;
-        border-radius: 8px !important;
+        padding-left: 1.7rem !important;
+        font-size: .62rem !important;
+        border-radius: 7px !important;
     }
     .demo-picker > i {
-        left: .55rem !important;
-        font-size: .82rem !important;
+        left: .48rem !important;
+        font-size: .76rem !important;
     }
     .demo-actions {
-        gap: .24rem !important;
+        grid-template-columns: 1fr 1fr !important;
+        gap: .2rem !important;
     }
     .btn-demo {
-        min-height: 28px !important;
-        height: 28px !important;
-        font-size: .64rem !important;
-        padding: 0 .35rem !important;
-        border-radius: 8px !important;
+        min-height: 25px !important;
+        height: 25px !important;
+        font-size: .6rem !important;
+        padding: 0 .3rem !important;
+        border-radius: 7px !important;
         --canto: 2px !important;
     }
     .btn-demo i {
-        font-size: .78rem !important;
+        font-size: .72rem !important;
     }
 
-    /* Derecha completa: Movimiento + Velocímetro + Detener sin cortarse */
+    /* Derecha completa: Movimiento + Velocímetro + Detener escalados con dvh sin cortarse */
     .area-drive {
         grid-row: 1 / 4 !important;
         align-self: stretch !important;
         justify-content: space-between !important;
-        padding: .25rem .35rem !important;
-        gap: .2rem !important;
+        padding: .18rem .28rem !important;
+        gap: .14rem !important;
+        min-height: 0 !important;
+        overflow: hidden !important;
     }
     .pad-panel .pad-title {
-        font-size: .62rem !important;
+        font-size: .56rem !important;
+        line-height: 1.1 !important;
         margin: 0 !important;
     }
     .dpad-grid {
-        max-width: 98px !important;
-        gap: .15rem !important;
-        padding-bottom: 2px !important;
+        width: clamp(66px, 33dvh, 90px) !important;
+        max-width: 100% !important;
+        aspect-ratio: 1 / 1 !important;
+        gap: .12rem !important;
+        padding-bottom: 1px !important;
+        margin: 0 auto !important;
     }
     .dir-btn {
-        font-size: .46rem !important;
-        border-radius: 7px !important;
-        padding: .08rem !important;
-        gap: .05rem !important;
+        font-size: .42rem !important;
+        border-radius: 6px !important;
+        padding: .05rem !important;
+        gap: .03rem !important;
         --canto: 2px !important;
     }
     .dir-btn i {
-        font-size: .78rem !important;
+        font-size: .72rem !important;
     }
     .dpad-center {
-        font-size: .78rem !important;
-        border-radius: 7px !important;
+        font-size: .72rem !important;
+        border-radius: 6px !important;
     }
 
     .velocimetro {
         display: flex !important;
         align-items: center !important;
         justify-content: space-between !important;
-        padding: .16rem .38rem !important;
-        border-radius: 8px !important;
+        padding: .12rem .32rem !important;
+        border-radius: 7px !important;
     }
     .velocimetro .velo-cab,
     .velocimetro .velo-barra,
@@ -2385,29 +2544,29 @@ body.vr-mode-pc #vista-control .area-ia.con-modo .ia-cab {
         margin: 0 !important;
     }
     .velo-valor span {
-        font-size: .88rem !important;
+        font-size: .8rem !important;
     }
     .velo-valor small {
-        font-size: .58rem !important;
+        font-size: .54rem !important;
     }
     .velo-modo {
-        font-size: .5rem !important;
-        padding: .06rem .3rem !important;
+        font-size: .48rem !important;
+        padding: .04rem .26rem !important;
     }
 
     .btn-stop {
-        min-height: 28px !important;
-        height: 28px !important;
-        font-size: .72rem !important;
-        border-radius: 8px !important;
+        min-height: 24px !important;
+        height: 24px !important;
+        font-size: .66rem !important;
+        border-radius: 7px !important;
         margin-top: 0 !important;
         --canto: 2px !important;
     }
     .btn-stop i {
-        font-size: .85rem !important;
+        font-size: .78rem !important;
     }
 
-    /* Vista Monitoreo en Landscape: tarjeta superior compacta + tabla visible */
+    /* Vista Monitoreo en Landscape */
     .vista-monitoreo {
         gap: .38rem !important;
         padding-bottom: .4rem !important;
@@ -2438,6 +2597,15 @@ body.vr-mode-pc #vista-control .area-ia.con-modo .ia-cab {
     .monitor-table-container {
         min-height: 130px !important;
         max-height: 220px !important;
+    }
+
+    /* Vista Administración en Landscape */
+    .vista-admin {
+        gap: .45rem !important;
+        padding-bottom: .6rem !important;
+    }
+    .vista-admin .panel {
+        padding: .5rem .65rem !important;
     }
 }
 
