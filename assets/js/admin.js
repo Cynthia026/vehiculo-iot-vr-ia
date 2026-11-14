@@ -1,7 +1,7 @@
 // assets/js/admin.js
 import { api } from './api.js?v=24';
 import { CONFIG } from './config.js?v=24';
-import { ui, normalizar } from './ui.js?v=24';
+import { ui, normalizar } from './ui.js?v=26';
 
 const SESSION_TOKEN_KEY = 'vehiculo_iot_jwt_session';
 

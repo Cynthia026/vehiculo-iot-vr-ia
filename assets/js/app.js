@@ -1,7 +1,7 @@
 // assets/js/app.js
 import { api } from './api.js?v=24';
 import { wsManager } from './websocket.js?v=24';
-import { ui, normalizar } from './ui.js?v=24';
+import { ui, normalizar } from './ui.js?v=26';
 import { CONFIG } from './config.js?v=24';
 import { adminManager } from './admin.js?v=24';
 import { ControlVoz, ControlGestos, ControlGiroscopio } from './control-ia.js?v=24';
