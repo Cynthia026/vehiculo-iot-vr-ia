@@ -1,0 +1,22 @@
+{
+    "name": "Vehículo IoT · Control 3D / VR",
+    "short_name": "Vehículo IoT",
+    "description": "Control de una excavadora IoT con gemelo digital 3D, realidad virtual y control con IA (voz, gestos y giroscopio).",
+    "lang": "es-MX",
+    "id": "./",
+    "start_url": "./",
+    "scope": "./",
+    "display": "standalone",
+    "orientation": "any",
+    "background_color": "#050a16",
+    "theme_color": "#0d1220",
+    "categories": ["education", "utilities"],
+    "icons": [
+        { "src": "assets/icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+        { "src": "assets/icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+        { "src": "assets/icons/maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+    ],
+    "shortcuts": [
+        { "name": "Asistente IA", "short_name": "Asistente", "url": "./?asistente=1", "icons": [{ "src": "assets/icons/icon-192.png", "sizes": "192x192" }] }
+    ]
+}

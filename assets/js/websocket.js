@@ -1,20 +1,27 @@
 // assets/js/websocket.js
-import { CONFIG } from './config.js?v=13';
-import { ui } from './ui.js?v=13';
+import { CONFIG } from './config.js?v=24';
+import { ui } from './ui.js?v=24';
 
 class WebSocketManager {
     constructor() {
         this.ws = null;
         this.reconnectAttempts = 0;
         this.maxAttempts = 5;
-        this.onMessage = null; // Permite avisar a app.js cuando llega algo
+        this.onMessage = null;
         this._manualClose = false;
+        this._reconnectTimer = null;
+    }
+
+    setOnMessage(callback) {
+        this.onMessage = callback;
     }
 
     connect() {
         this._manualClose = false;
+        clearTimeout(this._reconnectTimer);
+        this._reconnectTimer = null;
         ui.updateWssStatus('Conectando...', 'warning');
-        
+
         try {
             if (this.ws && (this.ws.readyState === WebSocket.OPEN || this.ws.readyState === WebSocket.CONNECTING)) {
                 this._manualClose = true;
@@ -27,14 +34,21 @@ class WebSocketManager {
                 console.log('WSS Conectado a unidad #' + CONFIG.VEHICULO_ID);
                 ui.updateWssStatus('En línea', 'success');
                 this.reconnectAttempts = 0;
+
+                // Autenticar el canal enviando el token dentro del frame del WebSocket (no en la URL)
+                if (CONFIG.AUTH_TOKEN && this.ws.readyState === WebSocket.OPEN) {
+                    this.ws.send(JSON.stringify({
+                        tipo_evento: 'auth_ws',
+                        token: CONFIG.AUTH_TOKEN
+                    }));
+                }
             };
 
             this.ws.onmessage = (event) => {
                 try {
                     const data = JSON.parse(event.data);
                     console.log('Evento WSS recibido:', data);
-                    
-                    // Si app.js está escuchando, le pasamos el JSON
+
                     if (this.onMessage) {
                         this.onMessage(data);
                     }
@@ -70,15 +84,20 @@ class WebSocketManager {
     reconnectForVehicle(idVehiculo) {
         CONFIG.setVehiculoId(idVehiculo);
         this.reconnectAttempts = 0;
+        clearTimeout(this._reconnectTimer);
+        this._reconnectTimer = null;
         this.connect();
     }
 
     attemptReconnect() {
-        if (this.reconnectAttempts < this.maxAttempts) {
-            this.reconnectAttempts++;
-            ui.updateWssStatus(`Reconectando (${this.reconnectAttempts})...`, 'warning');
-            setTimeout(() => this.connect(), 3000); 
-        }
+        if (this._reconnectTimer) return;
+        this.reconnectAttempts++;
+        const espera = this.reconnectAttempts <= this.maxAttempts ? 3000 : 15000;
+        ui.updateWssStatus(`Reconectando (${this.reconnectAttempts})...`, 'warning');
+        this._reconnectTimer = setTimeout(() => {
+            this._reconnectTimer = null;
+            this.connect();
+        }, espera);
     }
 }
 

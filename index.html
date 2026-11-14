@@ -6,10 +6,16 @@
     <meta name="theme-color" content="#0d1220">
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-capable" content="yes">
-    <title>Control, Monitoreo y Administración IoT - Vehículos</title>
+    <title>Control, Monitoreo y Administración IoT - Gemelo 3D / VR / IA</title>
 
-    <link rel="icon" type="image/png" href="assets/Favicon_Iot_vehiculo.png?v=13">
-    <link rel="apple-touch-icon" href="assets/Favicon_Iot_vehiculo.png?v=13">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="Vehículo IoT">
+    <meta name="description" content="Plataforma unificada de Control, Monitoreo y Administración IoT con Gemelo Digital 3D, WebXR, VR Celular y Control con IA (voz, gestos y giroscopio).">
+
+    <!-- App instalable (PWA) -->
+    <link rel="manifest" href="manifest.webmanifest">
+    <link rel="icon" type="image/png" sizes="192x192" href="assets/icons/icon-192.png">
+    <link rel="apple-touch-icon" href="assets/icons/apple-touch-icon.png">
 
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -17,7 +23,17 @@
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
 
-    <link rel="stylesheet" href="assets/css/styles.css?v=13">
+    <link rel="stylesheet" href="assets/css/styles.css?v=24">
+
+    <!-- Import Map nativo para Three.js y WebXR sin necesidad de compilación -->
+    <script type="importmap">
+    {
+        "imports": {
+            "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js",
+            "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/"
+        }
+    }
+    </script>
 </head>
 <body data-view="control">
 
@@ -29,23 +45,25 @@
                 <img src="assets/Favicon_Iot_vehiculo.png" alt="Logo Vehículo IoT" class="splash-logo">
             </div>
             <h1 class="splash-title">VEHÍCULO <span>IOT</span></h1>
-            <p class="splash-subtitle">CONTROL &middot; MONITOREO &middot; ADMINISTRACIÓN</p>
+            <p class="splash-subtitle">CONTROL &middot; MONITOREO &middot; ADMIN &middot; 3D &middot; VR &middot; IA</p>
             <div class="splash-progress-track">
                 <div id="splash-progress-bar" class="splash-progress-bar"></div>
             </div>
         </div>
     </div>
 
-    <!-- Fondo astronómico animado -->
-    <canvas id="space-bg" class="space-bg" aria-hidden="true"></canvas>
+    <!-- Escenario 3D interactivo Three.js + WebXR -->
+    <div id="three-stage" class="three-stage" aria-hidden="true">
+        <canvas id="three-canvas"></canvas>
+    </div>
 
-    <!-- Encabezado: título, unidad activa, pestañas de navegación y estado de conectividad -->
+    <!-- Encabezado: título, unidad activa, pestañas de navegación, botones 3D/IA/VR y estado de conectividad -->
     <header class="app-header">
         <div class="app-title">
             <img class="app-title-icon" src="assets/Favicon_Iot_vehiculo.png" alt="Logo Vehículo IoT">
             <div>
                 <h1>Vehículo IoT</h1>
-                <small id="header-unit-subtitle">Unidad 1 &middot; SN-EXC-0001</small>
+                <small id="header-unit-subtitle">Unidad 1 &middot; Gemelo 3D</small>
             </div>
             <select id="header-unit-select" class="header-unit-select" aria-label="Seleccionar unidad activa" title="Cambiar unidad física activa">
                 <option value="1">#1 Unidad 1 (VENDIDO)</option>
@@ -65,18 +83,39 @@
             </button>
         </nav>
 
-        <div class="status-group" id="status-panel">
-            <button type="button" id="btn-role-switcher" class="badge status-badge role-header-btn" title="Rol activo (Clic para cambiar perfil en Administración)">
-                <i class="bi bi-person-badge"></i> <span id="header-role-text">USUARIO: Cynthia</span>
+        <div class="header-right">
+            <button type="button" id="btn-reset-cam" class="btn-header-pill" title="Centrar vista 3D">
+                <i class="bi bi-camera-video"></i> <span>Centrar 3D</span>
             </button>
-            <div id="status-wss" class="badge bg-secondary status-badge" title="Estado del WebSocket">
-                <i class="bi bi-broadcast"></i> WSS: Desconectado
-            </div>
-            <div id="status-aws" class="badge bg-secondary status-badge" title="Disponibilidad API REST">
-                <i class="bi bi-cloud-check"></i> AWS: Comprobando...
-            </div>
-            <div id="status-rds" class="badge bg-secondary status-badge" title="Conexión Base de Datos">
-                <i class="bi bi-database"></i> RDS: Sin verificar
+
+            <button type="button" id="btn-asistente" class="btn-header-pill btn-asistente" title="Asistente IA conversacional" aria-expanded="false" aria-controls="asistente">
+                <i class="bi bi-chat-dots-fill"></i> <span>Asistente IA</span>
+            </button>
+
+            <button type="button" id="btn-vr-celular" class="btn-header-pill btn-vr-celular d-none" title="VR con el celular y un visor tipo Cardboard">
+                <i class="bi bi-phone-landscape"></i> <span>VR celular</span>
+            </button>
+
+            <button type="button" id="btn-vr" class="btn-header-pill btn-vr" title="Activar gafas de Realidad Virtual (WebXR)">
+                <i class="bi bi-headset-vr"></i> <span id="btn-vr-label">Modo VR</span>
+            </button>
+
+            <div class="status-group" id="status-panel">
+                <button type="button" id="btn-role-switcher" class="badge status-badge role-header-btn" title="Rol activo (Clic para cambiar perfil en Administración)">
+                    <i class="bi bi-person-badge"></i> <span id="header-role-text">USUARIO: Cynthia</span>
+                </button>
+                <div id="sim-chip" class="badge status-badge sim-chip d-none" title="AWS no responde: los botones mueven solo el modelo 3D y no se envían comandos al vehículo real">
+                    <i class="bi bi-joystick"></i> Modo simulación
+                </div>
+                <div id="status-wss" class="badge bg-secondary status-badge" title="Estado del WebSocket">
+                    <i class="bi bi-broadcast"></i> WSS: Desconectado
+                </div>
+                <div id="status-aws" class="badge bg-secondary status-badge" title="Disponibilidad API REST">
+                    <i class="bi bi-cloud-check"></i> AWS: Comprobando...
+                </div>
+                <div id="status-rds" class="badge bg-secondary status-badge" title="Conexión Base de Datos">
+                    <i class="bi bi-database"></i> RDS: Sin verificar
+                </div>
             </div>
         </div>
     </header>
@@ -85,51 +124,146 @@
 
         <div id="action-feedback" class="alert alert-info d-none" role="alert">Iniciando...</div>
 
-        <!-- ================= VISTA CONTROL (Práctica 4.1) ================= -->
+        <!-- ================= VISTA CONTROL (Práctica 4.1 + 3D + VR + IA) ================= -->
         <div id="vista-control" class="vista-control">
-            <!-- Panel de conducción -->
-            <section class="panel drive-panel" aria-label="Controles de conducción">
-                <div class="pad-row">
-                    <div class="pad">
-                        <h2 class="pad-title">Movimiento</h2>
-                        <div id="joystick-zone" class="joystick-zone" role="application" aria-label="Joystick de movimiento">
-                            <span class="jz-mark jz-up"><i class="bi bi-chevron-up"></i></span>
-                            <span class="jz-mark jz-down"><i class="bi bi-chevron-down"></i></span>
-                            <span class="jz-mark jz-left"><i class="bi bi-chevron-left"></i></span>
-                            <span class="jz-mark jz-right"><i class="bi bi-chevron-right"></i></span>
-                            <div id="joystick-knob" class="joystick-knob"><i class="bi bi-arrows-move"></i></div>
-                        </div>
-                        <p class="pad-hint">Avanzar &middot; Retroceder &middot; Girar</p>
+
+            <!-- ARRIBA: Accesorios -->
+            <section class="panel area-acc" aria-label="Accesorios">
+                <h2 class="panel-title"><i class="bi bi-sliders2"></i> Accesorios</h2>
+                <div id="extra-commands-container" class="commands-grid">
+                    <div class="commands-loading" id="cmds-loading">Conectando con AWS...</div>
+                </div>
+            </section>
+
+            <!-- IZQUIERDA: Brazo y motores -->
+            <section class="panel pad-panel area-arm" aria-label="Brazo y motores">
+                <h2 class="pad-title"><i class="bi bi-gear-wide-connected"></i> Brazo y motores</h2>
+                <div class="dpad-grid dpad-arm" role="group" aria-label="Botones de brazo y motores">
+                    <button type="button" class="dir-btn dir-up" data-cmd="SUBIR_BRAZO" aria-label="Subir brazo">
+                        <i class="bi bi-arrow-bar-up"></i>
+                        <span>Subir brazo</span>
+                    </button>
+                    <button type="button" class="dir-btn dir-left" data-cmd="MOTOR_IZQUIERDA" aria-label="Motor izquierda">
+                        <i class="bi bi-arrow-counterclockwise"></i>
+                        <span>Motor izq.</span>
+                    </button>
+                    <div class="dpad-center" aria-hidden="true">
+                        <i class="bi bi-cpu"></i>
                     </div>
-                    <div class="pad">
-                        <h2 class="pad-title">Brazo y motores</h2>
-                        <div id="joystick-zone-arm" class="joystick-zone joystick-alt" role="application" aria-label="Joystick de brazo y motores">
-                            <span class="jz-mark jz-up"><i class="bi bi-arrow-bar-up"></i></span>
-                            <span class="jz-mark jz-down"><i class="bi bi-arrow-bar-down"></i></span>
-                            <span class="jz-mark jz-left"><i class="bi bi-arrow-counterclockwise"></i></span>
-                            <span class="jz-mark jz-right"><i class="bi bi-arrow-clockwise"></i></span>
-                            <div id="joystick-knob-arm" class="joystick-knob"><i class="bi bi-gear-wide-connected"></i></div>
-                        </div>
-                        <p class="pad-hint">Brazo ↕ &middot; Motores ↔</p>
+                    <button type="button" class="dir-btn dir-right" data-cmd="MOTOR_DERECHA" aria-label="Motor derecha">
+                        <i class="bi bi-arrow-clockwise"></i>
+                        <span>Motor der.</span>
+                    </button>
+                    <button type="button" class="dir-btn dir-down" data-cmd="BAJAR_BRAZO" aria-label="Bajar brazo">
+                        <i class="bi bi-arrow-bar-down"></i>
+                        <span>Bajar brazo</span>
+                    </button>
+                </div>
+            </section>
+
+            <!-- ABAJO IZQUIERDA: Control con IA (voz, gestos y giroscopio) -->
+            <section class="panel area-ia" aria-label="Control con IA">
+                <div class="ia-cab">
+                    <h2 class="panel-title"><i class="bi bi-stars"></i> Control con IA</h2>
+                    <button type="button" class="ia-ayuda-btn" id="btn-ia-ayuda" aria-expanded="false" title="Ver comandos">
+                        <i class="bi bi-question-circle"></i>
+                    </button>
+                </div>
+                <div class="ia-modos" role="group" aria-label="Modos de control con IA">
+                    <button type="button" class="ia-btn" id="btn-ia-voz" aria-pressed="false">
+                        <i class="bi bi-mic-fill"></i><span>Voz</span>
+                    </button>
+                    <button type="button" class="ia-btn" id="btn-ia-gestos" aria-pressed="false">
+                        <i class="bi bi-hand-index-thumb-fill"></i><span>Gestos</span>
+                    </button>
+                    <button type="button" class="ia-btn" id="btn-ia-giro" aria-pressed="false">
+                        <i class="bi bi-phone-flip"></i><span>Giroscopio</span>
+                    </button>
+                </div>
+                <div class="ia-estado" id="ia-estado">Controla el vehículo con tu voz, tus manos o inclinando el celular.</div>
+
+                <div class="ia-camara d-none" id="ia-camara">
+                    <video id="ia-video" playsinline muted></video>
+                    <canvas id="ia-canvas"></canvas>
+                    <span class="ia-gesto" id="ia-gesto"></span>
+                </div>
+
+                <div class="ia-giro d-none" id="ia-giro">
+                    <div class="ia-giro-modos" role="group" aria-label="Qué controla el giroscopio">
+                        <button type="button" class="ia-giro-modo activo" data-modo="conducir" aria-pressed="true">🚜 Conducir</button>
+                        <button type="button" class="ia-giro-modo" data-modo="brazo" aria-pressed="false">🦾 Brazo</button>
+                        <button type="button" class="ia-giro-modo" data-modo="accesorios" aria-pressed="false">✨ Accesorios</button>
                     </div>
+                    <div class="ia-giro-fila">
+                        <div class="ia-giro-mira" id="ia-giro-mira" data-modo="conducir">
+                            <span class="giro-et giro-arriba" data-conducir="Avanzar" data-brazo="Bajar" data-accesorios="Turbo"></span>
+                            <span class="giro-et giro-abajo" data-conducir="Atrás" data-brazo="Subir" data-accesorios="—"></span>
+                            <span class="giro-et giro-izq" data-conducir="Izq" data-brazo="Mot I" data-accesorios="Luz"></span>
+                            <span class="giro-et giro-der" data-conducir="Der" data-brazo="Mot D" data-accesorios="Sonido"></span>
+                            <div class="ia-giro-punto" id="ia-giro-punto"></div>
+                        </div>
+                        <button type="button" class="ia-calibrar" id="btn-ia-calibrar"><i class="bi bi-crosshair"></i> Recalibrar</button>
+                    </div>
+                </div>
+
+                <div class="ia-ayuda d-none" id="ia-ayuda">
+                    <p><b>🎤 Voz:</b> "avanza", "avanza 3 segundos", "retrocede", "gira a la derecha", "sube el brazo", "motor izquierdo", "enciende la luz", "activa el turbo", "toca el claxon", "inicia la demo de excavación", "cancela la demo", <b>"alto"</b>.</p>
+                    <p><b>✋ Gestos:</b> ☝ apunta con el índice arriba/abajo/a los lados para avanzar, retroceder o girar · ✋ palma o ✊ puño = detener · 👍/👎 subir/bajar brazo · ✌ luz · 🤟 sonido.</p>
+                    <p><b>📱 Giroscopio:</b> en <b>🚜 Conducir</b>, inclina el celular adelante/atrás para avanzar/retroceder y a los lados para girar. En <b>🦾 Brazo</b>, inclina hacia ti para subir el brazo, adelante para bajarlo y a los lados para mover el motor izquierdo o derecho. En <b>✨ Accesorios</b>, inclina adelante para el turbo, a la izquierda para la luz y a la derecha para el sonido (regresa al centro entre uno y otro). Regresa a la posición inicial para detener.</p>
+                </div>
+            </section>
+
+            <!-- CENTRO: espacio libre para interactuar con el escenario 3D -->
+            <div class="stage-viewport-hint area-hint" aria-hidden="true">
+                <span class="stage-pill">
+                    <i class="bi bi-badge-3d"></i> Arrastra el fondo para rotar &middot; Rueda para zoom
+                </span>
+            </div>
+
+            <!-- DERECHA: Movimiento + Velocímetro + Detener -->
+            <section class="panel pad-panel area-drive" aria-label="Movimiento del vehículo">
+                <h2 class="pad-title"><i class="bi bi-arrows-move"></i> Movimiento</h2>
+                <div class="dpad-grid dpad-drive" role="group" aria-label="Botones de movimiento">
+                    <button type="button" class="dir-btn dir-up" data-cmd="AVANZAR" aria-label="Avanzar">
+                        <i class="bi bi-arrow-up"></i>
+                        <span>Avanzar</span>
+                    </button>
+                    <button type="button" class="dir-btn dir-left" data-cmd="GIRAR_IZQUIERDA" aria-label="Girar izquierda">
+                        <i class="bi bi-arrow-left"></i>
+                        <span>Izquierda</span>
+                    </button>
+                    <div class="dpad-center" aria-hidden="true">
+                        <i class="bi bi-truck-flatbed"></i>
+                    </div>
+                    <button type="button" class="dir-btn dir-right" data-cmd="GIRAR_DERECHA" aria-label="Girar derecha">
+                        <i class="bi bi-arrow-right"></i>
+                        <span>Derecha</span>
+                    </button>
+                    <button type="button" class="dir-btn dir-down" data-cmd="RETROCEDER" aria-label="Retroceder">
+                        <i class="bi bi-arrow-down"></i>
+                        <span>Retroceder</span>
+                    </button>
+                </div>
+                <!-- Velocímetro del vehículo (velocidad real del gemelo 3D) -->
+                <div class="velocimetro" id="velocimetro" aria-live="off">
+                    <div class="velo-top">
+                        <span class="velo-cab"><i class="bi bi-speedometer2"></i> Velocidad</span>
+                        <span class="velo-modo" id="velo-modo">Normal</span>
+                    </div>
+                    <div class="velo-valor"><span id="velo-num">0.0</span><small>km/h</small></div>
+                    <div class="velo-barra"><div class="velo-fill" id="velo-fill"></div></div>
+                    <div class="velo-estado" id="velo-estado">Detenido</div>
                 </div>
                 <button id="btn-stop" class="btn-stop" disabled>
                     <i class="bi bi-sign-stop-fill"></i> Detener
                 </button>
             </section>
 
-            <!-- Comandos y secuencias -->
-            <div class="side-column">
-                <section class="panel" aria-label="Accesorios">
-                    <h2 class="panel-title"><i class="bi bi-sliders2"></i> Accesorios</h2>
-                    <div id="extra-commands-container" class="commands-grid">
-                        <div class="commands-loading" id="cmds-loading">Conectando con AWS...</div>
-                    </div>
-                </section>
-
-                <section class="panel" aria-label="Secuencias demo">
-                    <h2 class="panel-title"><i class="bi bi-play-circle-fill"></i> Secuencias demo</h2>
-                    <p class="demo-caption">Ejecuta una rutina automática del vehículo.</p>
+            <!-- ABAJO: Secuencias demo -->
+            <section class="panel area-demo" aria-label="Secuencias demo">
+                <h2 class="panel-title"><i class="bi bi-play-circle-fill"></i> Secuencias demo</h2>
+                <p class="demo-caption">Ejecuta una rutina automática del vehículo.</p>
+                <div class="demo-row">
                     <div class="demo-picker">
                         <i class="bi bi-collection-play"></i>
                         <select id="demo-select" class="form-select demo-select" aria-label="Seleccionar demo">
@@ -144,8 +278,8 @@
                             <i class="bi bi-x-circle"></i> Cancelar
                         </button>
                     </div>
-                </section>
-            </div>
+                </div>
+            </section>
         </div>
 
         <!-- ================= VISTA MONITOREO (Práctica 4.2) ================= -->
@@ -210,10 +344,10 @@
                         <small class="text-secondary">Alterna entre los 3 roles del modelo comercial para operar y auditar permisos en vivo.</small>
                     </div>
                     <div class="d-flex flex-wrap gap-2">
-                        <button type="button" class="btn btn-sm admin-role-btn" data-switch-profile="ADMIN">
+                        <button type="button" class="btn btn-sm admin-role-btn active" data-switch-profile="ADMIN">
                             <i class="bi bi-building-gear"></i> Administrador (Empresa)
                         </button>
-                        <button type="button" class="btn btn-sm admin-role-btn active" data-switch-profile="USUARIO_A">
+                        <button type="button" class="btn btn-sm admin-role-btn" data-switch-profile="USUARIO_A">
                             <i class="bi bi-person-badge"></i> Usuario A (Cynthia · Unidad #1)
                         </button>
                         <button type="button" class="btn btn-sm admin-role-btn" data-switch-profile="USUARIO_B">
@@ -246,7 +380,7 @@
             </section>
 
             <!-- ================= SECCIÓN ROL: ADMINISTRADOR (EMPRESA) ================= -->
-            <div id="admin-role-section-admin" class="admin-role-section d-none">
+            <div id="admin-role-section-admin" class="admin-role-section">
                 <!-- Métricas Reales -->
                 <div id="admin-metrics-grid" class="admin-metrics-grid"></div>
 
@@ -411,7 +545,7 @@
             </div>
 
             <!-- ================= SECCIÓN ROL: USUARIO COMPRADOR ================= -->
-            <div id="admin-role-section-usuario" class="admin-role-section">
+            <div id="admin-role-section-usuario" class="admin-role-section d-none">
                 <section class="panel">
                     <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
                         <div>
@@ -515,10 +649,80 @@
 
     </main>
 
+    <!-- ================= VR CELULAR (Cardboard) ================= -->
+    <button type="button" id="vrc-salir" class="vrc-salir" aria-label="Salir de VR celular"><i class="bi bi-x-lg"></i></button>
+    <div id="vrc-intro" class="vrc-intro d-none" role="dialog" aria-label="Instrucciones VR celular">
+        <div class="vrc-intro-caja">
+            <i class="bi bi-headset-vr"></i>
+            <h2>VR celular</h2>
+            <ol>
+                <li>Pon el celular <b>en horizontal</b> dentro de tu visor (tipo Cardboard).</li>
+                <li>Mueve la cabeza para mirar alrededor. Abajo tienes el <b>tablero de botones</b>.</li>
+                <li>Mira un botón <b>1.6 s</b> para activarlo (o toca la pantalla para activarlo al instante).</li>
+                <li>Los movimientos duran 2.5 s; mira <b>STOP</b> para detener antes.</li>
+                <li>También puedes hablar: "avanza", "gira a la derecha", "alto", "centrar", "salir".</li>
+            </ol>
+            <div class="vrc-intro-botones">
+                <button type="button" class="vrc-cancelar" id="vrc-cancelar">Cancelar</button>
+                <button type="button" class="vrc-comenzar" id="vrc-comenzar">Comenzar</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ================= ASISTENTE IA CONVERSACIONAL ================= -->
+    <aside id="asistente" class="asistente d-none" aria-label="Asistente IA">
+        <header class="asis-cab">
+            <div class="asis-titulo">
+                <span class="asis-avatar"><i class="bi bi-stars"></i></span>
+                <div>
+                    <strong>Asistente IA</strong>
+                    <small id="asis-modo">Intérprete local</small>
+                </div>
+            </div>
+            <div class="asis-acciones">
+                <button type="button" class="asis-icono" id="asis-btn-config" title="Configurar IA"><i class="bi bi-gear-fill"></i></button>
+                <button type="button" class="asis-icono" id="asis-btn-limpiar" title="Nueva conversación"><i class="bi bi-arrow-counterclockwise"></i></button>
+                <button type="button" class="asis-icono" id="asis-btn-cerrar" title="Cerrar"><i class="bi bi-x-lg"></i></button>
+            </div>
+        </header>
+
+        <form class="asis-config d-none" id="asis-config" autocomplete="off">
+            <p class="asis-nota">Para conversar libremente, conecta la IA de Claude. La clave se guarda <b>solo en este navegador</b>; no la uses en computadoras compartidas. Sin clave, el asistente usa un intérprete local.</p>
+            <label>Clave de API de Anthropic
+                <input type="password" id="asis-api-key" placeholder="sk-ant-..." spellcheck="false">
+            </label>
+            <label>o URL de tu servidor proxy (opcional)
+                <input type="url" id="asis-proxy" placeholder="https://mi-proxy.workers.dev" spellcheck="false">
+            </label>
+            <label>Modelo
+                <input type="text" id="asis-modelo" placeholder="claude-haiku-5-5" spellcheck="false">
+            </label>
+            <div class="asis-config-botones">
+                <button type="button" class="asis-btn-sec" id="asis-config-borrar">Borrar clave</button>
+                <button type="submit" class="asis-btn-pri">Guardar</button>
+            </div>
+        </form>
+
+        <div class="asis-mensajes" id="asis-mensajes" aria-live="polite"></div>
+
+        <div class="asis-sugerencias" id="asis-sugerencias">
+            <button type="button">Haz un cuadrado</button>
+            <button type="button">Avanza 2 segundos y gira a la derecha</button>
+            <button type="button">Baila</button>
+            <button type="button">Saluda</button>
+        </div>
+
+        <form class="asis-entrada" id="asis-form">
+            <input type="text" id="asis-texto" placeholder="Escribe una orden… ej. &quot;excava y luego enciende la luz&quot;" autocomplete="off">
+            <button type="button" class="asis-icono asis-mic" id="asis-mic" title="Dictar"><i class="bi bi-mic-fill"></i></button>
+            <button type="submit" class="asis-enviar" title="Enviar"><i class="bi bi-send-fill"></i></button>
+        </form>
+    </aside>
+
     <footer class="app-footer">
-        Desarrollado por Cynthia Martínez García &middot; 2026 &middot; Control, Monitoreo y Administración IoT
+        Desarrollado por Cynthia Martínez García &middot; 2026 &middot; Control, Monitoreo y Administración IoT &middot; Gemelo 3D / VR / IA
     </footer>
 
-    <script type="module" src="assets/js/app.js?v=13"></script>
+    <script type="module" src="assets/js/app.js?v=24"></script>
 </body>
 </html>

@@ -1,5 +1,5 @@
 // assets/js/config.js
-export const CONFIG = {
+const configBase = {
     API_BASE_URL: 'https://api-vehiculo-iot.duckdns.org',
     WS_BASE_URL: 'wss://api-vehiculo-iot.duckdns.org/api/demos/ws/1',
     API_URL: 'https://api-vehiculo-iot.duckdns.org',
@@ -10,12 +10,16 @@ export const CONFIG = {
     setVehiculoId(id) {
         const num = Number(id) || 1;
         this.VEHICULO_ID = num;
+        // Seguridad: El token JWT NUNCA se concatena en la URL del WebSocket para no exponerlo en logs del servidor
         const baseWs = 'wss://api-vehiculo-iot.duckdns.org/api/demos/ws/' + num;
-        this.WS_BASE_URL = this.AUTH_TOKEN ? `${baseWs}?token=${encodeURIComponent(this.AUTH_TOKEN)}` : baseWs;
-        this.WS_URL = this.WS_BASE_URL;
+        this.WS_BASE_URL = baseWs;
+        this.WS_URL = baseWs;
     },
     setAuthToken(token) {
         this.AUTH_TOKEN = token || null;
-        this.setVehiculoId(this.VEHICULO_ID);
     }
 };
+
+export const CONFIG = (typeof window !== 'undefined' && window.__configSingleton)
+    ? window.__configSingleton
+    : (typeof window !== 'undefined' ? (window.__configSingleton = configBase) : configBase);

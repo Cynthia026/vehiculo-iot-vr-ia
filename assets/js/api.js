@@ -1,6 +1,6 @@
 // assets/js/api.js
-import { CONFIG } from './config.js?v=13';
-import { ui } from './ui.js?v=13';
+import { CONFIG } from './config.js?v=24';
+import { ui } from './ui.js?v=24';
 
 class ApiClient {
     constructor() {
@@ -66,10 +66,12 @@ class ApiClient {
         return await response.json();
     }
 
-    async postQuery(endpoint, params) {
-        // Cancela la petición anterior si hay una en vuelo (evita saturación)
+    async postQuery(endpoint, params, cancelable = true) {
+        // Cancela la petición de movimiento anterior si hay una en vuelo (evita saturación).
+        // Las peticiones no cancelables (DETENER) nunca se registran aquí, así que ninguna orden posterior puede abortarlas.
         if (this.abortController) this.abortController.abort();
-        this.abortController = new AbortController();
+        this.abortController = cancelable ? new AbortController() : null;
+        const signal = this.abortController ? this.abortController.signal : undefined;
 
         try {
             const queryString = new URLSearchParams(params).toString();
@@ -78,9 +80,9 @@ class ApiClient {
             const response = await fetch(url, {
                 method: 'POST',
                 headers: this._headers(),
-                signal: this.abortController.signal
+                signal
             });
-            
+
             if (!response.ok) {
                 const msg = await this._parseError(response);
                 const err = new Error(msg);
@@ -109,32 +111,50 @@ class ApiClient {
         return this.get(`/api/demos/vehiculo/${idVehiculo}`);
     }
 
-    async ejecutarMovimiento(idComando, idVehiculo = CONFIG.VEHICULO_ID) {
+    async ejecutarMovimiento(idComando, cancelableOrIdVehiculo = true, idVehiculo = CONFIG.VEHICULO_ID) {
+        let cancelable = true;
+        let targetVehiculo = idVehiculo;
+        if (typeof cancelableOrIdVehiculo === 'boolean') {
+            cancelable = cancelableOrIdVehiculo;
+        } else if (typeof cancelableOrIdVehiculo === 'number') {
+            targetVehiculo = cancelableOrIdVehiculo;
+        }
+
         return this.postQuery('/api/telemetria/movimiento', {
-            id_vehiculo: idVehiculo,
+            id_vehiculo: targetVehiculo,
             id_comando: idComando,
-            origen: 'API_POST'
-        });
+            origen: CONFIG.ORIGEN || 'API_POST'
+        }, cancelable);
     }
 
     async ejecutarDemo(idDemo, idVehiculo = CONFIG.VEHICULO_ID) {
         const url = `${CONFIG.API_BASE_URL}/api/demos/${idDemo}/ejecutar?id_vehiculo=${idVehiculo}`;
-        const response = await fetch(url, { 
+        const response = await fetch(url, {
             method: 'POST',
             headers: this._headers()
         });
         if (!response.ok) {
             const msg = await this._parseError(response);
-            throw new Error(msg);
+            const err = new Error(msg);
+            err.status = response.status;
+            throw err;
         }
         return await response.json();
     }
 
     async cancelarDemo(idVehiculo = CONFIG.VEHICULO_ID) {
-        return await fetch(`${CONFIG.API_BASE_URL}/api/demos/vehiculo/${idVehiculo}/cancelar`, {
+        const url = `${CONFIG.API_BASE_URL}/api/demos/vehiculo/${idVehiculo}/cancelar`;
+        const response = await fetch(url, {
             method: 'POST',
             headers: this._headers()
         });
+        if (!response.ok) {
+            const msg = await this._parseError(response);
+            const err = new Error(msg);
+            err.status = response.status;
+            throw err;
+        }
+        return await response.json();
     }
 
     // --- MÉTODOS DE MONITOREO (Práctica 4.2) ---
@@ -162,6 +182,10 @@ class ApiClient {
             nombre_visitante: nombreVisitante,
             id_vehiculo: idVehiculo
         });
+    }
+
+    async obtenerPerfilActual() {
+        return this.get('/api/auth/me');
     }
 
     async logout() {
@@ -252,6 +276,10 @@ class ApiClient {
 
     async obtenerCatalogoPublico() {
         return this.get('/api/exhibicion/catalogo');
+    }
+
+    async consultarAuditoria(limit = 30) {
+        return this.get(`/api/admin/auditoria?limit=${limit}`);
     }
 }
 
