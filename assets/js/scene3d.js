@@ -17,9 +17,9 @@ export class Scene3DManager {
             0.1,
             150
         );
-        // Cámara elevada para ver la excavadora y, delante, la consola de botones 3D
-        this.defaultCamPos = new THREE.Vector3(3.3, 3.7, 4.5);
-        this.defaultTarget = new THREE.Vector3(0.35, 0.3, 0.25);
+        // Cámara centrada en la excavadora en vista normal; al activar Modo VR se encuadra junto con la Consola 3D
+        this.defaultCamPos = new THREE.Vector3(2.9, 2.8, 3.8);
+        this.defaultTarget = new THREE.Vector3(0, 0.4, 0);
         this.camera.position.copy(this._camPosParaPantalla());
 
         this.renderer = new THREE.WebGLRenderer({
@@ -96,6 +96,17 @@ export class Scene3DManager {
         this.camera.position.copy(this._camPosParaPantalla()).add(this.desplazamiento);
         this.controls.target.copy(this.defaultTarget).add(this.desplazamiento);
         this.controls.update();
+    }
+
+    setModoConsolaVR(activo) {
+        if (activo) {
+            this.defaultCamPos.set(3.2, 3.65, 4.45);
+            this.defaultTarget.set(0.45, 0.32, 0.55);
+        } else {
+            this.defaultCamPos.set(2.9, 2.8, 3.8);
+            this.defaultTarget.set(0, 0.4, 0);
+        }
+        this.resetCamera();
     }
 
     // Velocidad lineal actual del vehículo en km/h y la máxima posible en el modo actual

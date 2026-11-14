@@ -480,10 +480,11 @@ class UIController {
         const select = document.getElementById('demo-select');
         select.innerHTML = '<option value="">Selecciona una DEMO</option>';
         if (!demos.length) select.innerHTML = '<option value="">Sin demos registradas</option>';
-        demos.forEach((demo) => {
+        demos.forEach((demo, idx) => {
             const option = document.createElement('option');
             option.value = demo.id_demo;
             option.textContent = demo.nombre;
+            if (idx === 0) option.selected = true;
             select.appendChild(option);
         });
 
@@ -491,6 +492,11 @@ class UIController {
         document.getElementById('btn-demo-start').disabled = false;
         document.getElementById('btn-demo-cancel').disabled = false;
 
+        if (demos.length > 0) {
+            this.consola3d?.setDemoActual(demos[0].nombre);
+        } else {
+            this.consola3d?.setDemoActual('Sin demos registradas');
+        }
         this.vrManager?.syncState({ demos, selectedDemoIndex: 0 });
     }
 }

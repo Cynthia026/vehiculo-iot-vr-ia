@@ -88,10 +88,10 @@ async function inicializar() {
         let vrManager = null;
         let consola3d = null;
         try {
-            const { Scene3DManager } = await import('./scene3d.js?v=24');
-            const { VRManager } = await import('./vr-controls.js?v=24');
-            const { Consola3D } = await import('./botones3d.js?v=24');
-            const { VRCelular, vrCelularDisponible } = await import('./vr-celular.js?v=24');
+            const { Scene3DManager } = await import('./scene3d.js?v=25');
+            const { VRManager } = await import('./vr-controls.js?v=25');
+            const { Consola3D } = await import('./botones3d.js?v=25');
+            const { VRCelular, vrCelularDisponible } = await import('./vr-celular.js?v=25');
             scene3d = new Scene3DManager('three-canvas');
 
             const callbacksBotones = {
@@ -101,7 +101,18 @@ async function inicializar() {
                     else presionarBotonDireccion(normCmd);
                 },
                 onRelease: () => soltarBotonDireccion(),
-                onStop: () => pararTodo()
+                onStop: () => pararTodo(),
+                onToggleIA: (modo) => controlIA?.alternar?.(modo),
+                onToggleAsistente: () => document.getElementById('btn-asistente')?.click(),
+                onCycleDemo: () => ciclarDemoSelect(),
+                onStartDemo: () => {
+                    const sel = document.getElementById('demo-select');
+                    const opciones = sel ? [...sel.options].filter((o) => o.value) : [];
+                    const idDemo = sel?.value || opciones[0]?.value;
+                    if (sel && idDemo && !sel.value) sel.value = idDemo;
+                    iniciarDemo(idDemo);
+                },
+                onCancelDemo: () => cancelarDemo()
             };
 
             consola3d = new Consola3D(scene3d, callbacksBotones);
@@ -114,7 +125,7 @@ async function inicializar() {
                 parar: () => pararTodo(),
                 activarVoz: () => controlIA?.activar('voz'),
                 alSalir: () => ui.showFeedback('Saliste de VR celular', 'info', 2000)
-            });
+            }, consola3d);
             ui.vrCelular = vrCelular;
             configurarVRCelular(vrCelularDisponible);
 
@@ -125,7 +136,7 @@ async function inicializar() {
                 onStartDemo: (idDemo) => iniciarDemo(idDemo),
                 onCancelDemo: () => cancelarDemo(),
                 onFeedback: (msg, type, duration) => ui.showFeedback(msg, type, duration)
-            });
+            }, consola3d);
         } catch (err3d) {
             console.error('Escenario 3D/VR no disponible:', err3d);
             document.getElementById('btn-vr')?.setAttribute('disabled', '');
@@ -255,8 +266,12 @@ function configurarControles(scene3d) {
     // Botón Detener
     document.getElementById('btn-stop').addEventListener('click', () => pararTodo());
 
-    document.getElementById('demo-select').addEventListener('change', () => {
+    document.getElementById('demo-select').addEventListener('change', (e) => {
         ui.playSound('tap');
+        const opt = e.target.selectedOptions?.[0];
+        if (opt && opt.value) {
+            ui.consola3d?.setDemoActual(opt.textContent);
+        }
     });
 
     document.getElementById('btn-demo-start').addEventListener('click', () => {
@@ -357,6 +372,12 @@ function configurarControlIA() {
         }
     };
 
+    function sincronizarEstadoConsolaIA() {
+        const modoActivo = Object.entries(modos).find(([, v]) => v.activo)?.[0] || null;
+        const asisAbierto = !document.getElementById('asistente')?.classList.contains('d-none');
+        ui.consola3d?.setEstadoIA({ modo: modoActivo, asistente: Boolean(asisAbierto) });
+    }
+
     function marcar(modo, activo) {
         const m = modos[modo];
         m.activo = activo;
@@ -364,6 +385,7 @@ function configurarControlIA() {
         m.btn.setAttribute('aria-pressed', String(activo));
         m.panel?.classList.toggle('d-none', !activo);
         document.querySelector('.area-ia')?.classList.toggle('con-modo', Object.values(modos).some((x) => x.activo));
+        sincronizarEstadoConsolaIA();
     }
 
     const mensajeError = (modo, e) => {
@@ -454,7 +476,11 @@ function configurarControlIA() {
         // Activa un modo si no está activo (lo usa VR celular para encender la voz)
         activar: (modo) => {
             if (modos[modo] && !modos[modo].activo && modos[modo].ctrl.soportado !== false) alternar(modo);
-        }
+        },
+        alternar: (modo) => {
+            if (modos[modo]) alternar(modo);
+        },
+        sincronizarConsola: () => sincronizarEstadoConsolaIA()
     };
 
     // Al ocultar la página se apagan cámara, micrófono y giroscopio (y el vehículo se detiene)
@@ -522,6 +548,7 @@ function configurarAsistente(acciones, modos) {
         btnAbrir.classList.toggle('activo', abierto);
         btnAbrir.setAttribute('aria-expanded', String(abierto));
         if (abierto) setTimeout(() => entrada.focus({ preventScroll: true }), 50);
+        controlIA?.sincronizarConsola?.();
     };
 
     const burbuja = (rol, texto) => {
@@ -815,6 +842,25 @@ function cancelarDemoSimulada(avisar = true) {
 }
 
 // --- DEMOS (reales o simuladas) ---------------------------------------------
+
+function ciclarDemoSelect() {
+    const select = document.getElementById('demo-select');
+    if (!select) return;
+    const opciones = [...select.options].filter((o) => o.value);
+    if (!opciones.length) {
+        ui.playSound('cancel');
+        ui.showFeedback('No hay demos disponibles', 'warning', 1800);
+        return;
+    }
+    const idxActual = opciones.findIndex((o) => o.value === select.value);
+    const sigIdx = (idxActual + 1) % opciones.length;
+    const sigOpt = opciones[sigIdx];
+    select.value = sigOpt.value;
+    ui.playSound('tap');
+    ui.vibrar(10);
+    ui.consola3d?.setDemoActual(sigOpt.textContent);
+    ui.showFeedback(`DEMO seleccionada: ${sigOpt.textContent}`, 'info', 1800);
+}
 
 async function iniciarDemo(idDemo) {
     if (!idDemo) {
