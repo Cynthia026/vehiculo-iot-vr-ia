@@ -1,7 +1,7 @@
 // assets/js/admin.js
-import { api } from './api.js?v=28';
-import { CONFIG } from './config.js?v=28';
-import { ui, normalizar } from './ui.js?v=28';
+import { api } from './api.js?v=29';
+import { CONFIG } from './config.js?v=29';
+import { ui, normalizar } from './ui.js?v=29';
 
 const SESSION_TOKEN_KEY = 'vehiculo_iot_jwt_session';
 
@@ -723,16 +723,48 @@ class AdminManager {
         `;
     }
 
+    _guardarEstado() {
+        // Estado persistido en memoria de la sesión actual
+    }
+
+    registrarAuditoria({ accion, id_vehiculo, resultado, motivo, detalle }) {
+        if (!Array.isArray(this.state.auditoria)) this.state.auditoria = [];
+        this.state.auditoria.unshift({
+            accion: accion || 'EVENTO_SEGURIDAD',
+            actor: this.sesion?.nombre || 'Operador',
+            rol: this.sesion?.rol || 'INVITADO',
+            detalle: detalle || `${resultado ? `[${resultado}] ` : ''}${motivo || ''}${id_vehiculo ? ` (Unidad #${id_vehiculo})` : ''}`,
+            fecha_hora: new Date().toISOString()
+        });
+    }
+
+    renderBitacoraAuditoria() {
+        this.renderAuditoria();
+    }
+
+    activarReservaInvitadoLocal(nombreVisitante = 'Visitante Showroom') {
+        this.state.reservaInvitado = {
+            id_vehiculo: 2,
+            nombre_vehiculo: 'Unidad 2 - Showroom',
+            operador: nombreVisitante,
+            expira_ts: Date.now() + 180 * 1000,
+            activa: true
+        };
+        this._iniciarRelojInvitado();
+        ui.playSound('start');
+        ui.showFeedback('Reserva exclusiva de exhibición iniciada (3 min)', 'success', 2800);
+    }
+
     renderTablaModelos() {
         const tbody = document.getElementById('tabla-admin-modelos');
         const selectMod = document.getElementById('unit-form-modelo');
         if (tbody) {
             tbody.innerHTML = this.state.modelos.map(m => `
                 <tr>
-                    <td><span class="badge bg-dark border border-info text-info">${m.codigo_modelo}</span></td>
-                    <td class="fw-semibold">${m.nombre}</td>
-                    <td>${m.microcontrolador_default || 'ESP8266'}</td>
-                    <td>
+                    <td data-label="Código"><span class="badge bg-dark border border-info text-info">${m.codigo_modelo}</span></td>
+                    <td data-label="Modelo" class="fw-semibold">${m.nombre}</td>
+                    <td data-label="MCU">${m.microcontrolador_default || 'ESP8266'}</td>
+                    <td data-label="Capacidades">
                         <span class="badge ${m.tiene_brazo ? 'bg-success' : 'bg-secondary'} me-1">Brazo: ${m.tiene_brazo ? 'Sí' : 'No'}</span>
                         <span class="badge ${m.tiene_motores_giro ? 'bg-info text-dark' : 'bg-secondary'}">Giro: ${m.tiene_motores_giro ? 'Sí' : 'No'}</span>
                     </td>
@@ -767,17 +799,17 @@ class AdminManager {
 
                 return `
                     <tr>
-                        <td><strong>#${u.id_vehiculo}</strong></td>
-                        <td><code>${u.numero_serie}</code></td>
-                        <td>
+                        <td data-label="ID"><strong>#${u.id_vehiculo}</strong></td>
+                        <td data-label="Núm. Serie"><code>${u.numero_serie}</code></td>
+                        <td data-label="Unidad / Modelo">
                             <div class="fw-semibold">${u.nombre}</div>
                             <small class="text-secondary">${u.modelo} (${u.codigo_modelo})</small>
                         </td>
-                        <td><span class="badge ${badgeClass}">${u.estado_comercial}</span></td>
-                        <td>${u.nombre_propietario ? `<i class="bi bi-person-check-fill text-success"></i> ${u.nombre_propietario}` : '<span class="text-secondary">Sin asignar</span>'}</td>
-                        <td>${soporteHtml}</td>
-                        <td>
-                            <div class="d-flex flex-wrap gap-1">
+                        <td data-label="Estado"><span class="badge ${badgeClass}">${u.estado_comercial}</span></td>
+                        <td data-label="Propietario">${u.nombre_propietario ? `<i class="bi bi-person-check-fill text-success"></i> ${u.nombre_propietario}` : '<span class="text-secondary">Sin asignar</span>'}</td>
+                        <td data-label="Privacidad / Soporte">${soporteHtml}</td>
+                        <td data-label="Acciones">
+                            <div class="d-flex flex-wrap gap-1 justify-content-end justify-content-md-center">
                                 <button type="button" class="btn btn-sm btn-outline-info py-0 px-2" data-action="intentar-operar-admin" data-id="${u.id_vehiculo}" title="Intentar operar en Control">
                                     <i class="bi bi-controller"></i> Operar
                                 </button>
@@ -826,15 +858,15 @@ class AdminManager {
                     const perfilBtn = Number(c.id_usuario) === 3 ? 'USUARIO_B' : 'USUARIO_A';
                     return `
                         <tr>
-                            <td>#${c.id_usuario}</td>
-                            <td class="fw-semibold">${c.nombre}</td>
-                            <td>${c.email}</td>
-                            <td>
+                            <td data-label="ID">#${c.id_usuario}</td>
+                            <td data-label="Cliente" class="fw-semibold">${c.nombre}</td>
+                            <td data-label="Correo">${c.email}</td>
+                            <td data-label="Unidades">
                                 ${propias.length
                                     ? propias.map(p => `<span class="badge bg-success me-1">#${p.id_vehiculo} ${p.nombre}</span>`).join('')
                                     : '<span class="text-secondary small">Ninguna asignada</span>'}
                             </td>
-                            <td>
+                            <td data-label="Vista Previa">
                                 <button type="button" class="btn btn-sm btn-outline-info py-0 px-2" data-switch-profile="${perfilBtn}">
                                     <i class="bi bi-eye"></i> Ver vista
                                 </button>
@@ -906,13 +938,13 @@ class AdminManager {
         }
         tbody.innerHTML = this.state.auditoria.slice(0, 20).map(ev => {
             const { fecha, hora } = ui.formatearFechaHora(ev.fecha_hora);
-            const isAlert = /BLOQUEADO|SIN_SOPORTE/.test(ev.accion);
+            const isAlert = /BLOQUEADO|SIN_SOPORTE|RECHAZADO|PRUEBA/.test(ev.accion);
             return `
                 <tr class="${isAlert ? 'table-danger-row' : ''}">
-                    <td><span class="badge ${isAlert ? 'bg-danger' : 'bg-secondary'}">${ev.accion}</span></td>
-                    <td><strong>${ev.actor || 'Usuario'}</strong> <small class="text-secondary">(${ev.rol})</small></td>
-                    <td>${ev.detalle || ''}</td>
-                    <td class="text-nowrap small">${fecha} ${hora}</td>
+                    <td data-label="Evento"><span class="badge ${isAlert ? 'bg-danger' : 'bg-secondary'}">${ev.accion}</span></td>
+                    <td data-label="Actor / Rol"><strong>${ev.actor || 'Usuario'}</strong> <small class="text-secondary">(${ev.rol})</small></td>
+                    <td data-label="Detalle">${ev.detalle || ''}</td>
+                    <td data-label="Fecha / Hora" class="small">${fecha} ${hora}</td>
                 </tr>
             `;
         }).join('');
@@ -975,6 +1007,17 @@ class AdminManager {
         }).join('');
     }
 
+    _obtenerListaDemosMemoria(idVehiculo = 1) {
+        if (Array.isArray(this.state.demosMemoria)) {
+            return this.state.demosMemoria;
+        }
+        if (this.state.demosMemoria && typeof this.state.demosMemoria === 'object') {
+            return this.state.demosMemoria[idVehiculo] || this.state.demosMemoria[1] || [];
+        }
+        this.state.demosMemoria = [];
+        return this.state.demosMemoria;
+    }
+
     async cargarDemosParaEditor(idVehiculo = 1) {
         const contDemos = document.getElementById('editor-demos-lista');
         const selectCmdPaso = document.getElementById('step-form-comando');
@@ -994,8 +1037,7 @@ class AdminManager {
         }
 
         if (demos.length === 0) {
-            if (!this.state.demosMemoria) this.state.demosMemoria = {};
-            demos = this.state.demosMemoria[idVehiculo] || this.state.demosMemoria[1] || [];
+            demos = this._obtenerListaDemosMemoria(idVehiculo);
         }
         if (comandos.length === 0) {
             if (!this.state.comandosMemoria) this.state.comandosMemoria = {};
@@ -1093,12 +1135,12 @@ class AdminManager {
 
         tbody.innerHTML = pasos.map((p, idx) => `
             <tr>
-                <td><span class="monitor-row-num">${p.orden}</span></td>
-                <td class="fw-semibold">${p.comando || `Comando #${p.id_comando}`}</td>
-                <td>${p.duracion_ms} ms</td>
-                <td>${p.pausa_ms} ms</td>
-                <td>
-                    <div class="d-flex gap-1">
+                <td data-label="Orden"><span class="monitor-row-num">${p.orden}</span></td>
+                <td data-label="Comando" class="fw-semibold">${p.comando || `Comando #${p.id_comando}`}</td>
+                <td data-label="Duración">${p.duracion_ms} ms</td>
+                <td data-label="Pausa">${p.pausa_ms} ms</td>
+                <td data-label="Acciones">
+                    <div class="d-flex gap-1 justify-content-end justify-content-md-center">
                         <button type="button" class="btn btn-sm btn-outline-light py-0 px-2"
                             data-action="mover-paso-arriba" data-idx="${idx}" ${idx === 0 ? 'disabled' : ''} title="Subir paso">
                             <i class="bi bi-arrow-up"></i>
@@ -1295,10 +1337,10 @@ class AdminManager {
                     await api.eliminarDemo(id);
                 } catch (_) {
                     const vid = CONFIG.VEHICULO_ID || 1;
-                    if (this.state.demosMemoria?.[vid]) {
-                        this.state.demosMemoria[vid] = this.state.demosMemoria[vid].filter(d => Number(d.id_demo) !== id);
-                        this._guardarEstado();
-                    }
+                    const lista = this._obtenerListaDemosMemoria(vid);
+                    const idx = lista.findIndex(d => Number(d.id_demo) === id);
+                    if (idx !== -1) lista.splice(idx, 1);
+                    this._guardarEstado();
                 }
                 ui.showFeedback('Secuencia DEMO eliminada', 'warning', 2400);
                 await this.cargarDemosParaEditor(CONFIG.VEHICULO_ID);
@@ -1714,10 +1756,9 @@ class AdminManager {
                         this.idDemoSeleccionada = creada.id_demo;
                     }
                 } catch (_) {
-                    if (!this.state.demosMemoria) this.state.demosMemoria = {};
-                    if (!this.state.demosMemoria[vid]) this.state.demosMemoria[vid] = [];
+                    const lista = this._obtenerListaDemosMemoria(vid);
                     const nuevoId = Date.now() % 100000;
-                    this.state.demosMemoria[vid].push({
+                    lista.push({
                         id_demo: nuevoId,
                         id_vehiculo: vid,
                         nombre,

@@ -1548,14 +1548,34 @@ body.vr-celular::after {
    PRÁCTICA 4.3: MÓDULO DE ADMINISTRACIÓN, ROLES Y EDITOR DE DEMOS
    ===================================================================== */
 html:has(body[data-view="admin"]),
-body[data-view="admin"] {
+html:has(body[data-view="monitoreo"]) {
     height: auto !important;
     min-height: 100dvh !important;
+    max-height: none !important;
+    overflow-x: hidden !important;
     overflow-y: auto !important;
+    overscroll-behavior-y: auto !important;
 }
-body[data-view="admin"] .app-main {
+body[data-view="admin"],
+body[data-view="monitoreo"] {
+    height: auto !important;
+    min-height: 100dvh !important;
+    max-height: none !important;
+    overflow-x: hidden !important;
+    overflow-y: visible !important;
+    overscroll-behavior-y: auto !important;
+    -webkit-user-select: text;
+    user-select: text;
+}
+body[data-view="admin"] .three-stage,
+body[data-view="monitoreo"] .three-stage {
+    pointer-events: none !important;
+}
+body[data-view="admin"] .app-main,
+body[data-view="monitoreo"] .app-main {
     overflow: visible !important;
     height: auto !important;
+    max-height: none !important;
     flex: 1 0 auto !important;
     pointer-events: auto !important;
 }
@@ -1596,14 +1616,25 @@ body[data-view="admin"] .app-main {
 
 .vista-admin {
     width: 100%;
+    max-width: 100%;
+    min-width: 0;
     display: flex;
     flex-direction: column;
     gap: .85rem;
-    padding-bottom: 1rem;
+    padding-bottom: 1.5rem;
     pointer-events: auto;
+}
+.vista-admin .panel {
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    box-sizing: border-box;
 }
 
 .admin-role-section {
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
     display: flex;
     flex-direction: column;
     gap: .85rem;
@@ -1658,8 +1689,10 @@ body[data-view="admin"] .app-main {
 
 .admin-metrics-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(175px, 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
     gap: .75rem;
+    width: 100%;
+    max-width: 100%;
 }
 .admin-metric-card {
     background: rgba(15, 23, 44, .68);
@@ -1669,6 +1702,7 @@ body[data-view="admin"] .app-main {
     display: flex;
     flex-direction: column;
     gap: .15rem;
+    min-width: 0;
 }
 .metric-label { font-size: .74rem; color: var(--muted); font-weight: 600; }
 .metric-value { font-size: 1.45rem; font-weight: 700; line-height: 1.15; }
@@ -1676,24 +1710,49 @@ body[data-view="admin"] .app-main {
 
 .admin-two-col {
     display: grid;
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
     gap: .85rem;
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
 }
-@media (min-width: 992px) {
+.admin-two-col > * {
+    min-width: 0;
+    max-width: 100%;
+}
+@media (min-width: 1120px) {
     .admin-two-col {
-        grid-template-columns: 1.15fr .85fr;
+        grid-template-columns: minmax(0, 1.15fr) minmax(0, .85fr);
     }
 }
 
 .admin-table-wrap {
-    max-height: 230px;
-    overflow: auto;
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    max-height: none;
+    overflow-x: auto;
+    overflow-y: visible;
     border-radius: 12px;
     border: 1px solid var(--line);
     background: rgba(8, 12, 26, .48);
+    -webkit-overflow-scrolling: touch;
+}
+.admin-table-wrap .monitor-table {
+    width: 100%;
+    max-width: 100%;
+}
+.admin-table-wrap .monitor-table th,
+.admin-table-wrap .monitor-table td {
+    white-space: normal;
+    word-break: break-word;
 }
 
 .admin-inline-form {
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    box-sizing: border-box;
     background: rgba(10, 16, 32, .58);
     border: 1px solid var(--line);
     border-radius: 12px;
@@ -1705,6 +1764,7 @@ body[data-view="admin"] .app-main {
     color: var(--text) !important;
     border: 1px solid rgba(160, 195, 255, .22) !important;
     font-size: .78rem !important;
+    max-width: 100%;
 }
 .admin-input:focus {
     border-color: var(--info) !important;
@@ -1713,10 +1773,11 @@ body[data-view="admin"] .app-main {
 
 .admin-comandos-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(165px, 1fr));
+    grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
     gap: .45rem;
-    max-height: 190px;
-    overflow-y: auto;
+    max-height: none;
+    overflow-y: visible;
+    width: 100%;
 }
 .admin-cmd-chip {
     display: flex;
@@ -1728,6 +1789,7 @@ body[data-view="admin"] .app-main {
     border: 1px solid var(--line);
     background: rgba(16, 24, 46, .62);
     font-size: .76rem;
+    min-width: 0;
 }
 .admin-cmd-chip.is-disabled {
     opacity: .55;
@@ -1735,8 +1797,9 @@ body[data-view="admin"] .app-main {
 
 .user-vehicles-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
     gap: .8rem;
+    width: 100%;
 }
 .user-vehicle-card {
     background: rgba(14, 22, 44, .7);
@@ -1744,6 +1807,7 @@ body[data-view="admin"] .app-main {
     border-radius: 14px;
     padding: .85rem 1rem;
     transition: border-color .15s ease, box-shadow .15s ease;
+    min-width: 0;
 }
 .user-vehicle-card.is-selected {
     border-color: rgba(92, 200, 255, .6);
@@ -1761,8 +1825,9 @@ body[data-view="admin"] .app-main {
     display: flex;
     flex-direction: column;
     gap: .45rem;
-    max-height: 220px;
-    overflow-y: auto;
+    max-height: none;
+    overflow-y: visible;
+    width: 100%;
 }
 .demo-editor-item {
     display: flex;
@@ -1774,6 +1839,7 @@ body[data-view="admin"] .app-main {
     border: 1px solid var(--line);
     background: rgba(14, 22, 44, .62);
     cursor: pointer;
+    min-width: 0;
 }
 .demo-editor-item.active {
     border-color: rgba(92, 200, 255, .65);
@@ -1781,6 +1847,7 @@ body[data-view="admin"] .app-main {
 }
 .demo-editor-item-main {
     flex: 1;
+    min-width: 0;
 }
 .table-danger-row td {
     background: rgba(255, 93, 108, .09) !important;
@@ -1820,17 +1887,6 @@ body.vr-mode-pc #vista-control .area-ia.con-modo .ia-cab {
 .admin-input::placeholder {
     color: rgba(190, 212, 248, 0.72) !important;
     opacity: 1 !important;
-}
-.admin-table-wrap {
-    width: 100%;
-    max-width: 100%;
-    overflow-x: auto !important;
-    overflow-y: auto !important;
-    -webkit-overflow-scrolling: touch;
-}
-.admin-table-wrap .monitor-table th,
-.admin-table-wrap .monitor-table td {
-    white-space: nowrap;
 }
 
 .admin-jwt-details summary {
@@ -2178,54 +2234,112 @@ body.vr-mode-pc #vista-control .area-ia.con-modo .ia-cab {
         max-height: 340px;
     }
 
-    /* Vista Administración en Celular Vertical */
+    /* Vista Administración en Celular Vertical:
+       100% adaptada al ancho de la pantalla sin recortes laterales ni verticales.
+       Las tablas se transforman en tarjetas responsivas con etiquetas (data-label)
+       para que todas las columnas y botones se vean completos. */
     .vista-admin {
         gap: .55rem;
-        padding-bottom: .8rem;
+        padding-bottom: 1.2rem;
+        width: 100%;
+        max-width: 100%;
     }
     .vista-admin .panel {
         padding: .6rem .65rem;
-        overflow: hidden;
+        width: 100%;
+        max-width: 100%;
+        min-width: 0;
+        overflow: visible;
     }
-    .admin-role-grid {
+    .admin-role-buttons {
+        width: 100%;
+        display: grid !important;
         grid-template-columns: repeat(2, minmax(0, 1fr));
-        gap: .38rem;
+        gap: .35rem !important;
     }
-    .role-profile-card {
-        padding: .48rem .55rem;
-        gap: .45rem;
-    }
-    .role-profile-ico {
-        width: 30px;
-        height: 30px;
-        font-size: .92rem;
-    }
-    .role-profile-card strong {
-        font-size: .72rem;
-    }
-    .role-profile-card small {
-        font-size: .62rem;
+    .admin-role-btn {
+        width: 100%;
+        font-size: .68rem;
+        padding: .3rem .4rem;
+        text-align: center;
+        white-space: normal;
+        line-height: 1.2;
     }
     .admin-metrics-grid {
         grid-template-columns: repeat(2, minmax(0, 1fr));
         gap: .4rem;
     }
     .admin-metric-card {
-        padding: .48rem .58rem;
-        gap: .45rem;
+        padding: .5rem .6rem;
+        gap: .15rem;
     }
-    .metric-icon {
-        width: 32px;
-        height: 32px;
-        font-size: .95rem;
+    .metric-label {
+        font-size: .66rem;
     }
     .metric-value {
-        font-size: 1.05rem;
+        font-size: 1.15rem;
     }
-    .admin-table-wrap .monitor-table th,
-    .admin-table-wrap .monitor-table td {
-        padding: .35rem .45rem;
-        font-size: .68rem;
+    .metric-sub {
+        font-size: .62rem;
+    }
+
+    /* Tablas de Administración convertidas en tarjetas completas en modo vertical */
+    .vista-admin .admin-table-wrap {
+        border: 0;
+        background: transparent;
+        overflow: visible !important;
+        max-height: none !important;
+    }
+    .vista-admin .monitor-table,
+    .vista-admin .monitor-table tbody {
+        display: block;
+        width: 100%;
+    }
+    .vista-admin .monitor-table thead {
+        display: none;
+    }
+    .vista-admin .monitor-table tbody tr {
+        display: block;
+        width: 100%;
+        margin-bottom: .5rem;
+        padding: .45rem .6rem;
+        border-radius: 11px;
+        border: 1px solid rgba(160, 195, 255, .18);
+        background: rgba(12, 19, 38, .78);
+    }
+    .vista-admin .monitor-table tbody tr:last-child {
+        margin-bottom: 0;
+    }
+    .vista-admin .monitor-table tbody td {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: .5rem;
+        padding: .24rem 0 !important;
+        border-bottom: 1px solid rgba(160, 195, 255, .08);
+        text-align: right;
+        font-size: .72rem !important;
+        white-space: normal !important;
+        word-break: break-word;
+    }
+    .vista-admin .monitor-table tbody td:last-child {
+        border-bottom: 0;
+        padding-bottom: 0 !important;
+    }
+    .vista-admin .monitor-table tbody td[data-label]::before {
+        content: attr(data-label);
+        font-weight: 600;
+        font-size: .65rem;
+        color: var(--info);
+        text-transform: uppercase;
+        letter-spacing: .03em;
+        text-align: left;
+        flex-shrink: 0;
+    }
+    .vista-admin .admin-comandos-grid {
+        grid-template-columns: 1fr;
+        max-height: none !important;
+        overflow: visible !important;
     }
 
     .app-footer {
@@ -2251,20 +2365,28 @@ body.vr-mode-pc #vista-control .area-ia.con-modo .ia-cab {
         overflow-y: hidden !important;
     }
 
-    /* En Monitoreo y Administración permitimos scroll vertical en Landscape */
+    /* En Monitoreo y Administración permitimos scroll vertical completo en Landscape */
     html:has(body[data-view="monitoreo"]),
+    html:has(body[data-view="admin"]) {
+        height: auto !important;
+        min-height: 100dvh !important;
+        max-height: none !important;
+        overflow-x: hidden !important;
+        overflow-y: auto !important;
+    }
     body[data-view="monitoreo"],
-    html:has(body[data-view="admin"]),
     body[data-view="admin"] {
         height: auto !important;
         min-height: 100dvh !important;
         max-height: none !important;
-        overflow-y: auto !important;
+        overflow-x: hidden !important;
+        overflow-y: visible !important;
     }
     body[data-view="monitoreo"] .app-main,
     body[data-view="admin"] .app-main {
         overflow: visible !important;
         height: auto !important;
+        max-height: none !important;
         pointer-events: auto !important;
     }
 
@@ -2599,13 +2721,55 @@ body.vr-mode-pc #vista-control .area-ia.con-modo .ia-cab {
         max-height: 220px !important;
     }
 
-    /* Vista Administración en Landscape */
+    /* Vista Administración en Landscape:
+       1 sola columna a todo el ancho horizontal para que las tablas,
+       formularios y botones se vean 100% completos sin recortarse */
     .vista-admin {
-        gap: .45rem !important;
-        padding-bottom: .6rem !important;
+        gap: .5rem !important;
+        padding-bottom: 1.2rem !important;
+        width: 100% !important;
+        max-width: 100% !important;
     }
     .vista-admin .panel {
-        padding: .5rem .65rem !important;
+        padding: .55rem .7rem !important;
+        width: 100% !important;
+        max-width: 100% !important;
+        min-width: 0 !important;
+        overflow: visible !important;
+    }
+    .vista-admin .panel-title {
+        font-size: .78rem !important;
+        margin-bottom: .35rem !important;
+    }
+    .vista-admin .admin-two-col {
+        grid-template-columns: minmax(0, 1fr) !important;
+        gap: .5rem !important;
+    }
+    .vista-admin .admin-metrics-grid {
+        grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+        gap: .4rem !important;
+    }
+    .vista-admin .admin-metric-card {
+        padding: .45rem .6rem !important;
+    }
+    .vista-admin .metric-value {
+        font-size: 1.1rem !important;
+    }
+    .vista-admin .admin-table-wrap {
+        max-height: none !important;
+        overflow-x: auto !important;
+        overflow-y: visible !important;
+    }
+    .vista-admin .monitor-table th,
+    .vista-admin .monitor-table td {
+        white-space: normal !important;
+        font-size: .7rem !important;
+        padding: .32rem .38rem !important;
+    }
+    .vista-admin .admin-comandos-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+        max-height: none !important;
+        overflow: visible !important;
     }
 }
 

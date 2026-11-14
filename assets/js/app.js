@@ -1,11 +1,11 @@
 // assets/js/app.js
-import { api } from './api.js?v=28';
-import { wsManager } from './websocket.js?v=28';
-import { ui, normalizar } from './ui.js?v=28';
-import { CONFIG } from './config.js?v=28';
-import { adminManager } from './admin.js?v=28';
-import { ControlVoz, ControlGestos, ControlGiroscopio } from './control-ia.js?v=28';
-import { AsistenteIA, describirPaso } from './asistente-ia.js?v=28';
+import { api } from './api.js?v=29';
+import { wsManager } from './websocket.js?v=29';
+import { ui, normalizar } from './ui.js?v=29';
+import { CONFIG } from './config.js?v=29';
+import { adminManager } from './admin.js?v=29';
+import { ControlVoz, ControlGestos, ControlGiroscopio } from './control-ia.js?v=29';
+import { AsistenteIA, describirPaso } from './asistente-ia.js?v=29';
 
 let catalogoComandos = [];
 let idComandoDetener = null;
