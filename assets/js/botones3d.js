@@ -401,13 +401,16 @@ export class Consola3D {
      * @param {THREE.Mesh} boton
      * @param {{ autoSoltarMs?: number }} opciones
      */
-    activarBoton3D(boton, { autoSoltarMs = 0 } = {}) {
+    activarBoton3D(boton, { autoSoltarMs = 0, pointerId = null } = {}) {
         if (!boton || !boton.userData) return;
         const { cmd, tipo, modoIA } = boton.userData;
 
         if (tipo === 'hold') {
             this._soltar();
             this.presionado = boton;
+            // Solo se suelta al levantar el dedo/ratón si el botón se presionó con ese mismo puntero.
+            // Si lo activó la mirada, un toque en VR celular o el gatillo WebXR, lo suelta su propio temporizador o el gatillo.
+            this.pointerId = pointerId;
             this.cb.onPress?.(cmd, false);
             if (autoSoltarMs > 0) {
                 clearTimeout(this._autoReleaseTimer);
@@ -448,18 +451,20 @@ export class Consola3D {
     }
 
     _down(e) {
-        if (this.s.renderer.xr.isPresenting || (e.pointerType === 'mouse' && e.button !== 0)) return;
+        // En gafas WebXR manda el gatillo del control y en VR celular (pantalla dividida) manda la mira central:
+        // ahí las coordenadas del toque no corresponden a la vista, así que este manejador no interviene.
+        if (this.s.renderer.xr.isPresenting || this.s.modoExterno) return;
+        if (e.pointerType === 'mouse' && e.button !== 0) return;
         const boton = this._botonBajoPuntero(e);
         if (!boton) return;
 
         e.stopImmediatePropagation();
         e.preventDefault();
-        this.pointerId = e.pointerId;
-        this.activarBoton3D(boton);
+        this.activarBoton3D(boton, { pointerId: e.pointerId });
     }
 
     _up(e) {
-        if (this.presionado && (this.pointerId === null || e.pointerId === this.pointerId)) {
+        if (this.presionado && this.pointerId !== null && e.pointerId === this.pointerId) {
             this._soltar();
         }
     }
@@ -473,7 +478,7 @@ export class Consola3D {
     }
 
     _move(e) {
-        if (e.pointerType !== 'mouse') return;
+        if (e.pointerType !== 'mouse' || this.s.modoExterno || this.s.renderer.xr.isPresenting) return;
         this._setHover(this._botonBajoPuntero(e));
     }
 

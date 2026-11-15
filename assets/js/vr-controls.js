@@ -155,6 +155,12 @@ export class VRManager {
         for (let i = 0; i < 2; i++) {
             const controller = this.renderer.xr.getController(i);
             controller.userData.index = i;
+            // Guardar la fuente de entrada para la vibración háptica al presionar botones 3D
+            controller.addEventListener('connected', (e) => { controller.userData.inputSource = e.data; });
+            controller.addEventListener('disconnected', () => {
+                controller.userData.inputSource = null;
+                this._onTriggerUp(controller);
+            });
 
             // Puntero láser
             const lineGeo = new THREE.BufferGeometry().setFromPoints([

@@ -398,6 +398,9 @@ export class VRCelular {
 
     _activar(boton) {
         const u = boton.userData;
+        // Reinicia la mirada para que un toque no se sume a la activación por mirada (evita doble activación)
+        this.progreso = 0;
+        u.bloqueado = true;
         if (u.esAux) {
             if (u.tipo === 'centrar') this.centrar();
             else if (u.tipo === 'salir') this.salir();
