@@ -85,6 +85,11 @@ Al activar el modo **Gestos**, la cámara detecta en tiempo real los 21 puntos d
 | **👎 Pulgar abajo** (`Thumb_Down`) | **`BAJAR_BRAZO`** | Apunta el pulgar hacia abajo para descender el brazo hidráulico. |
 | **✌ Señal de Victoria / Paz** (`Victory`) | **`LUZ`** | Extiende índice y medio en "V" para encender/apagar los faros LED. |
 | **🤟 Gesto Rock / "Te quiero"** (`ILoveYou`) | **`SONIDO`** | Extiende pulgar, índice y meñique para activar el claxon/sonido. |
+| **⬅ Pulgar de lado hacia tu izquierda** (puño cerrado) | **`MOTOR_IZQUIERDA`** | Cierra el puño y apunta el pulgar hacia tu lado izquierdo. |
+| **➡ Pulgar de lado hacia tu derecha** (puño cerrado) | **`MOTOR_DERECHA`** | Cierra el puño y apunta el pulgar hacia tu lado derecho. |
+| **🤙 Shaka** (pulgar y meñique) | **Iniciar DEMO** | Extiende pulgar y meñique (resto doblado) y sostenlo ~0.5 s: inicia la demo seleccionada en la lista. |
+
+> Para **cancelar una demo** basta con ✋ palma abierta o ✊ puño: el paro inmediato también detiene la secuencia DEMO en curso.
 
 ---
 

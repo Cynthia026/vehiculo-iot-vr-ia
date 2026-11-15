@@ -4,7 +4,7 @@ import { wsManager } from './websocket.js?v=29';
 import { ui, normalizar } from './ui.js?v=29';
 import { CONFIG } from './config.js?v=29';
 import { adminManager } from './admin.js?v=29';
-import { ControlVoz, ControlGestos, ControlGiroscopio } from './control-ia.js?v=29';
+import { ControlVoz, ControlGestos, ControlGiroscopio } from './control-ia.js?v=35';
 import { AsistenteIA, describirPaso } from './asistente-ia.js?v=29';
 
 let catalogoComandos = [];
@@ -341,6 +341,13 @@ function configurarControlIA() {
             const select = document.getElementById('demo-select');
             const opciones = [...select.options].filter((o) => o.value);
             if (!opciones.length) return false;
+            // Gesto 🤙: inicia la demo que está seleccionada en la lista (o la primera)
+            if (texto === null) {
+                const opcionSel = opciones.find((o) => o.value === select.value) || opciones[0];
+                select.value = opcionSel.value;
+                iniciarDemo(opcionSel.value);
+                return true;
+            }
             const palabras = normalizarTexto(texto).split(/\s+/).filter((p) => p.length > 3);
             const numero = parseInt(texto, 10);
             let opcion = null;

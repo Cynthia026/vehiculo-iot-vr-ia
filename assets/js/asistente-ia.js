@@ -5,7 +5,7 @@
 // - Sin configuración: usa un intérprete local (secuencias, figuras, ángulos, repeticiones).
 // - Con IA: usa la API de Claude (clave propia guardada solo en este navegador, o un servidor proxy).
 
-import { interpretarVoz, nombreComando } from './control-ia.js?v=23';
+import { interpretarVoz, nombreComando } from './control-ia.js?v=35';
 
 const CLAVE_CONFIG = 'vehiculo-iot-asistente';
 const MODELO_PREDETERMINADO = 'claude-haiku-5-5';

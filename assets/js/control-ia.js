@@ -251,12 +251,18 @@ export class ControlVoz {
 
 const dist = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
 const doblado = (lm, tip, pip) => dist(lm[tip], lm[0]) < dist(lm[pip], lm[0]) * 1.05;
+const extendido = (lm, tip, pip) => dist(lm[tip], lm[0]) > dist(lm[pip], lm[0]) * 1.12;
+// Pulgar separado de la palma: la punta queda lejos del nudillo del índice y más lejos de la muñeca que su articulación
+const pulgarExtendido = (lm) =>
+    dist(lm[4], lm[5]) > dist(lm[5], lm[0]) * 0.6 && dist(lm[4], lm[0]) > dist(lm[3], lm[0]) * 1.02;
 
 /**
  * Clasifica la mano detectada.
  * - Índice extendido (resto doblado): mueve hacia donde apunta (arriba avanza, abajo retrocede, lados gira).
  * - Palma abierta o puño: detener. Pulgar arriba/abajo: subir/bajar brazo.
  * - Victoria ✌: luz. "Te quiero" 🤟: sonido.
+ * - Pulgar de lado (resto doblado): motor izquierdo / derecho.
+ * - "Shaka" 🤙 (pulgar y meñique extendidos): iniciar la demo seleccionada.
  * Las coordenadas x se interpretan como en un espejo (lo que ve el usuario).
  */
 export function clasificarMano(lm, gesto = 'None', score = 0) {
@@ -275,6 +281,31 @@ export function clasificarMano(lm, gesto = 'None', score = 0) {
         return vx < 0
             ? { tipo: 'mover', cmd: 'GIRAR_DERECHA', clave: '👉 Derecha' }
             : { tipo: 'mover', cmd: 'GIRAR_IZQUIERDA', clave: '👈 Izquierda' };
+    }
+
+    // --- Gestos adicionales detectados por la posición de los dedos ---
+    const men = extendido(lm, 20, 18);
+    const pulgar = pulgarExtendido(lm);
+    const idxDob = doblado(lm, 8, 6);
+    const medDob = doblado(lm, 12, 10);
+    const anuDob = doblado(lm, 16, 14);
+    const menDob = doblado(lm, 20, 18);
+
+    // 🤙 Shaka: pulgar y meñique extendidos, índice/medio/anular doblados -> iniciar demo
+    if (pulgar && men && idxDob && medDob && anuDob) {
+        return { tipo: 'demo', clave: '🤙 Shaka: Iniciar demo' };
+    }
+
+    // Pulgar de lado con los demás dedos doblados -> motor izquierdo / derecho
+    if (pulgar && idxDob && medDob && anuDob && menDob) {
+        const vx = lm[4].x - lm[2].x;
+        const vy = lm[4].y - lm[2].y;
+        if (Math.abs(vx) > Math.abs(vy) * 1.3) {
+            // Espejo: en la imagen x baja = el usuario apunta a su derecha
+            return vx < 0
+                ? { tipo: 'mover', cmd: 'MOTOR_DERECHA', clave: '👍➡ Pulgar a la derecha: Motor der.' }
+                : { tipo: 'mover', cmd: 'MOTOR_IZQUIERDA', clave: '⬅👍 Pulgar a la izquierda: Motor izq.' };
+        }
     }
 
     if (score < 0.55) return null;
@@ -314,6 +345,7 @@ export class ControlGestos {
         this.actual = null;           // clave de la acción vigente
         this.sosteniendo = false;     // si este control tiene presionado un movimiento
         this.ultimoInstantaneo = 0;
+        this.ultimaDemo = -Infinity;
     }
 
     async iniciar() {
@@ -353,7 +385,7 @@ export class ControlGestos {
         }
         this.video.srcObject = this.stream;
         await this.video.play();
-        this.a.estado('✋ Gestos activos: ☝ apunta para mover, ✋ palma para detener');
+        this.a.estado('✋ Gestos activos: ☝ apunta para mover, 👍 brazo, pulgar de lado motores, 🤙 demo, ✋ palma para detener');
         this._bucle();
     }
 
@@ -401,7 +433,8 @@ export class ControlGestos {
             this.cuadros = 1;
         }
         // Soltar la mano es inmediato; las acciones nuevas requieren 3 cuadros seguidos
-        const necesarios = clave === null ? 2 : 3;
+        // La demo pide sostener el gesto ~0.5 s para evitar activaciones accidentales
+        const necesarios = clave === null ? 2 : (accion?.tipo === 'demo' ? 10 : 3);
         if (this.cuadros >= necesarios && clave !== this.actual) {
             this.actual = clave;
             this._aplicar(accion);
@@ -426,6 +459,17 @@ export class ControlGestos {
             this.sosteniendo = false;
             this.a.parar();
             this.a.estado(`✋ ${accion.clave}`);
+        } else if (accion.tipo === 'demo') {
+            if (this.sosteniendo) {
+                this.sosteniendo = false;
+                this.a.soltar();
+            }
+            const ahora = performance.now();
+            if (ahora - this.ultimaDemo > 4000) {
+                this.ultimaDemo = ahora;
+                const ok = this.a.iniciarDemo(null);
+                this.a.estado(ok ? `✋ ${accion.clave}` : '✋ 🤙 No hay demos disponibles para esta unidad');
+            }
         } else if (accion.tipo === 'accesorio') {
             if (this.sosteniendo) {
                 this.sosteniendo = false;
