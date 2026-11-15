@@ -89,9 +89,9 @@ async function inicializar() {
         let consola3d = null;
         try {
             const { Scene3DManager } = await import('./scene3d.js?v=28');
-            const { VRManager } = await import('./vr-controls.js?v=30');
-            const { Consola3D } = await import('./botones3d.js?v=30');
-            const { VRCelular, vrCelularDisponible } = await import('./vr-celular.js?v=30');
+            const { VRManager } = await import('./vr-controls.js?v=31');
+            const { Consola3D } = await import('./botones3d.js?v=31');
+            const { VRCelular, vrCelularDisponible } = await import('./vr-celular.js?v=31');
             scene3d = new Scene3DManager('three-canvas');
 
             const callbacksBotones = {
@@ -135,7 +135,12 @@ async function inicializar() {
                 onStop: callbacksBotones.onStop,
                 onStartDemo: (idDemo) => iniciarDemo(idDemo),
                 onCancelDemo: () => cancelarDemo(),
-                onFeedback: (msg, type, duration) => ui.showFeedback(msg, type, duration)
+                onFeedback: (msg, type, duration) => ui.showFeedback(msg, type, duration),
+                // En celulares, "Modo VR" abre el VR celular (pantalla dividida para visor Cardboard)
+                onVRCelular: () => {
+                    ui.playSound('tap');
+                    document.getElementById('vrc-intro')?.classList.remove('d-none');
+                }
             }, consola3d);
         } catch (err3d) {
             console.error('Escenario 3D/VR no disponible:', err3d);

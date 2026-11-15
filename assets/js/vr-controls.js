@@ -74,6 +74,14 @@ export class VRManager {
                 return;
             }
 
+            // En celulares (visor tipo Cardboard) se usa el modo VR celular: pantalla dividida con mira y toque directo
+            const esCelular = /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent) &&
+                !/OculusBrowser|Quest|Pico|Wolvic/i.test(navigator.userAgent);
+            if (esCelular && this.callbacks.onVRCelular) {
+                this.callbacks.onVRCelular();
+                return;
+            }
+
             // Si hay gafas WebXR conectadas, iniciar sesión inmersiva en los lentes
             if (this.xrSupported) {
                 try {
@@ -382,7 +390,7 @@ export class VRManager {
         if (hit.tipo === 'consola3d' && hit.boton) {
             const esHold = hit.boton.userData?.tipo === 'hold';
             if (esHold) {
-                this.activeTriggerHold.set(controller.userData.index, { tipo: 'consola3d' });
+                this.activeTriggerHold.set(controller.userData.index, { tipo: 'consola3d', inicio: performance.now() });
             }
             this.consola3d.activarBoton3D(hit.boton);
         }
@@ -391,8 +399,11 @@ export class VRManager {
     _onTriggerUp(controller) {
         const idx = controller.userData.index;
         if (this.activeTriggerHold.has(idx)) {
+            const { inicio } = this.activeTriggerHold.get(idx);
             this.activeTriggerHold.delete(idx);
-            this.consola3d?._soltar();
+            // Un toque corto (visor Cardboard o gatillo rápido) mantiene el movimiento 2.5 s; si lo mantienes, dura lo que lo sostengas
+            const transcurrido = performance.now() - (inicio || 0);
+            this.consola3d?.soltarEn(transcurrido < 400 ? 2500 - transcurrido : 0);
         }
     }
 }

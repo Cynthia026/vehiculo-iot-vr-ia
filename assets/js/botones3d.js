@@ -103,7 +103,19 @@ export class Consola3D {
         if (!this.modoVR) {
             this._soltar();
             this._setHover(null);
+            this.grupo.scale.setScalar(1);
         }
+    }
+
+    // Suelta el movimiento mantenido dentro de `ms` milisegundos (toques cortos en VR celular / Cardboard)
+    soltarEn(ms) {
+        clearTimeout(this._autoReleaseTimer);
+        if (!this.presionado) return;
+        if (ms <= 0) {
+            this._soltar();
+            return;
+        }
+        this._autoReleaseTimer = setTimeout(() => this._soltar(), ms);
     }
 
     // Resalta el botón 3D que corresponde al comando activo (null = ninguno)
@@ -501,9 +513,7 @@ export class Consola3D {
             this.grupo.position.set((d ? d.x : 0), 0.12, (d ? d.z : 0) + 1.45);
             this.grupo.rotation.y = 0;
         } else if (this.s.modoExterno) {
-            // En VR Celular (Cardboard) colocamos la consola centrada frente a la vista del jugador
-            this.grupo.position.set((d ? d.x : 0), 0.18, (d ? d.z : 0) + 1.65);
-            this.grupo.rotation.y = 0;
+            // En VR Celular (Cardboard) la posición, el tamaño y la orientación los fija VRCelular cada cuadro
         } else {
             // En Modo VR de computadora
             if (d) this.grupo.position.set(this.posicionBase.x + d.x, 0, this.posicionBase.z + d.z);

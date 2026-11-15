@@ -6,14 +6,27 @@ import { StereoEffect } from 'three/addons/effects/StereoEffect.js';
 
 const TIEMPO_MIRADA = 1.6;        // segundos mirando un botón para activarlo
 const DURACION_MOVIMIENTO = 2.5;  // segundos que dura un movimiento activado con la mirada
-const OFFSET_JUGADOR = new THREE.Vector3(0, 1.75, 3.15); // dónde está el usuario respecto al vehículo
+const OFFSET_JUGADOR = new THREE.Vector3(0, 1.35, 3.3); // dónde está el usuario respecto al vehículo
+
+// Consola 3D en VR celular: más pequeña y cercana para que quepa completa en la vista de cada ojo
+const ESCALA_CONSOLA = 0.55;
+const DIST_CONSOLA = 1.2;                         // metros frente al usuario
+const ANGULO_CONSOLA = THREE.MathUtils.degToRad(33); // grados por debajo de la línea de la vista
+
+// Recentrado: si giras la cabeza más de este ángulo, el escenario y la consola se recolocan frente a ti
+const ZONA_LIBRE = THREE.MathUtils.degToRad(32);
+const VELOCIDAD_RECENTRADO = 3.2;
+const _ejeY = new THREE.Vector3(0, 1, 0);
+const envolver = (a) => Math.atan2(Math.sin(a), Math.cos(a));
+const esCelular = () => /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent) &&
+    !/OculusBrowser|Quest|Pico|Wolvic/i.test(navigator.userAgent);
 
 const AMBAR = '#ffb43a', VERDE = '#3ddc97', GRIS = '#9aa6c4';
 
 // Botones auxiliares de navegación VR Celular (Centrar vista / Salir)
 const BOTONES_AUX = [
-    { id: 'CENTRAR', glifo: '◎', texto: 'CENTRAR', x: -0.14, y: -0.32, color: GRIS, tipo: 'centrar', chico: true },
-    { id: 'SALIR', glifo: '✕', texto: 'SALIR', x: 0.14, y: -0.32, color: GRIS, tipo: 'salir', chico: true }
+    { id: 'CENTRAR', glifo: '◎', texto: 'CENTRAR', x: -0.12, y: 0.15, color: GRIS, tipo: 'centrar', chico: true },
+    { id: 'SALIR', glifo: '✕', texto: 'SALIR', x: 0.12, y: 0.15, color: GRIS, tipo: 'salir', chico: true }
 ];
 
 // Orientación del dispositivo -> cuaternión de la cámara
@@ -37,6 +50,8 @@ export async function vrCelularDisponible() {
     if (new URLSearchParams(location.search).get('vrcelular') === '1') return true;
     const tactil = window.matchMedia('(pointer: coarse)').matches;
     if (!tactil) return false;
+    // En celulares siempre se ofrece (aunque el navegador tenga WebXR): es el modo probado para visores Cardboard
+    if (esCelular()) return true;
     try {
         if (navigator.xr && await navigator.xr.isSessionSupported('immersive-vr')) return false;
     } catch { /* sin WebXR */ }
@@ -60,6 +75,14 @@ export class VRCelular {
         this.rig = new THREE.Group();           // posición del usuario (sigue al vehículo, sin girar)
         this.tablero = new THREE.Group();       // HUD + botones auxiliares Centrar/Salir
         this.raycaster = new THREE.Raycaster();
+        this.raycasterToque = new THREE.Raycaster();
+        this.camOjo = new THREE.PerspectiveCamera();   // cámara de un ojo para ubicar el botón tocado
+        this.ndcToque = new THREE.Vector2();
+        this.qVista = new THREE.Quaternion();
+        this.qYaw = new THREE.Quaternion();
+        this.yawCorreccion = 0;      // giro aplicado para mantener el escenario frente al usuario
+        this.recentrando = false;
+        this._centrarAhora = true;
         this.centro = new THREE.Vector2(0, 0);
         this.qSensor = new THREE.Quaternion();
         this.qOffset = new THREE.Quaternion();
@@ -104,6 +127,9 @@ export class VRCelular {
         this.conSensor = false;
         this.recalibrar = true;
         this.arrastre = { yaw: 0, pitch: -0.22 };
+        this.yawCorreccion = 0;
+        this.recentrando = false;
+        this._centrarAhora = true;
         document.body.classList.add('vr-celular');
 
         const s = this.s;
@@ -132,7 +158,7 @@ export class VRCelular {
         window.addEventListener('pointerup', this._onPointerUp);
         document.addEventListener('fullscreenchange', this._onFullscreen);
 
-        this.mostrarEstado('Mira un botón de la Consola 3D 1.6 s o toca la pantalla para activarlo');
+        this.mostrarEstado('Toca un botón o míralo 1.6 s para activarlo');
         this.a.activarVoz?.();
     }
 
@@ -180,9 +206,8 @@ export class VRCelular {
     }
 
     centrar() {
-        this.recalibrar = true;
-        this.arrastre.yaw = 0;
         this.arrastre.pitch = -0.22;
+        this._centrarAhora = true;   // el escenario se coloca de inmediato hacia donde estás mirando
         this.mostrarEstado('Vista centrada');
     }
 
@@ -195,8 +220,9 @@ export class VRCelular {
     // --- Construcción de HUD y botones auxiliares -------------------------------
 
     _construirTableroAux() {
-        this.tablero.position.set(0, -0.82, -1.0);
-        this.tablero.rotation.x = -0.65;
+        // Arriba de la excavadora (la consola queda abajo), inclinado hacia el usuario
+        this.tablero.position.set(0, 0.3, -1.25);
+        this.tablero.rotation.x = 0.18;
 
         this.botonesAux = BOTONES_AUX.map((def) => {
             const tam = 0.11;
@@ -254,10 +280,10 @@ export class VRCelular {
         this.hudTextura = new THREE.CanvasTexture(this.hudCanvas);
         this.hudTextura.colorSpace = THREE.SRGBColorSpace;
         this.hud = new THREE.Mesh(
-            new THREE.PlaneGeometry(1.4, 0.175),
+            new THREE.PlaneGeometry(0.9, 0.1125),
             new THREE.MeshBasicMaterial({ map: this.hudTextura, transparent: true })
         );
-        this.hud.position.set(0, -0.48, -0.01);
+        this.hud.position.set(0, 0, -0.01);
         this.tablero.add(this.hud);
     }
 
@@ -320,10 +346,50 @@ export class VRCelular {
         this.arrastre.pitch = THREE.MathUtils.clamp(this._puntero.pitch + dy * 0.005, -1.3, 1.3);
     }
 
+    // Busca el botón que está bajo el dedo, en la mitad (ojo) de la pantalla que se tocó
+    _botonEnToque(e) {
+        const s = this.s;
+        const rect = s.renderer.domElement.getBoundingClientRect();
+        const mitad = rect.width / 2;
+        if (!mitad || !rect.height) return null;
+        const x = e.clientX - rect.left;
+        const izquierdo = x < mitad;
+        const xOjo = izquierdo ? x : x - mitad;
+        this.ndcToque.set((xOjo / mitad) * 2 - 1, -((e.clientY - rect.top) / rect.height) * 2 + 1);
+
+        const ojo = this.camOjo;
+        ojo.fov = s.camera.fov;
+        ojo.aspect = s.camera.aspect * 0.5;   // cada ojo usa la mitad del ancho
+        ojo.near = s.camera.near;
+        ojo.far = s.camera.far;
+        ojo.updateProjectionMatrix();
+        s.camera.updateMatrixWorld(true);
+        s.camera.getWorldPosition(ojo.position);
+        s.camera.getWorldQuaternion(ojo.quaternion);
+        ojo.translateX(izquierdo ? -0.032 : 0.032);
+        ojo.updateMatrixWorld(true);
+
+        this.raycasterToque.setFromCamera(this.ndcToque, ojo);
+        const hit = this.consola3d?.intersectarRayo(this.raycasterToque);
+        if (hit) return hit.boton;
+        const aux = this.raycasterToque.intersectObjects(this.botonesAux, false)[0];
+        return aux ? aux.object : null;
+    }
+
     _tocar(e) {
         if (!this.activo) return;
         e.stopImmediatePropagation();
         e.preventDefault();
+
+        // 1. Toque directo sobre un botón (en cualquiera de las dos mitades)
+        const boton = this._botonEnToque(e);
+        if (boton) {
+            this._puntero = null;
+            this._presionarDirecto(boton, e.pointerId);
+            return;
+        }
+
+        // 2. Toque en otra zona: activa el botón que señala la mira central (visor Cardboard)
         this._puntero = { x: e.clientX, y: e.clientY, yaw: this.arrastre.yaw, pitch: this.arrastre.pitch, movido: false };
         const pid = e.pointerId;
         const toque = this._puntero;
@@ -333,6 +399,45 @@ export class VRCelular {
             if (!toque.movido && this.mirando) this._activar(this.mirando);
         };
         window.addEventListener('pointerup', alSoltar, true);
+    }
+
+    // Botón tocado con el dedo: los movimientos duran mientras mantienes el dedo (mínimo 2.5 s si solo tocas)
+    _presionarDirecto(boton, pid) {
+        const u = boton.userData;
+        if (u.esAux || u.tipo !== 'hold') {
+            this._activar(boton);
+            return;
+        }
+        this.progreso = 0;
+        u.bloqueado = true;
+        this.consola3d?.activarBoton3D(boton);
+        this.mostrarEstado(`${u.texto || u.cmd}`);
+        const inicio = performance.now();
+        const alSoltar = (ev) => {
+            if (ev.pointerId !== pid) return;
+            window.removeEventListener('pointerup', alSoltar, true);
+            window.removeEventListener('pointercancel', alSoltar, true);
+            if (this.consola3d?.presionado !== boton) return;
+            const restante = DURACION_MOVIMIENTO * 1000 - (performance.now() - inicio);
+            this.consola3d.soltarEn(restante);
+        };
+        window.addEventListener('pointerup', alSoltar, true);
+        window.addEventListener('pointercancel', alSoltar, true);
+    }
+
+    // Coloca la Consola 3D frente al usuario, más pequeña, para que se vea completa en cada ojo
+    _colocarConsola() {
+        const g = this.consola3d?.grupo;
+        if (!g) return;
+        const caida = DIST_CONSOLA * Math.tan(ANGULO_CONSOLA);
+        g.scale.setScalar(ESCALA_CONSOLA);
+        g.rotation.set(0, 0, 0);
+        g.position.set(
+            this.rig.position.x,
+            this.rig.position.y - caida - 0.62 * ESCALA_CONSOLA,
+            this.rig.position.z - DIST_CONSOLA
+        );
+        g.updateMatrixWorld(true);
     }
 
     // --- Ciclo por cuadro ------------------------------------------------------------
@@ -345,12 +450,31 @@ export class VRCelular {
         this._ultimoCuadro = ahora;
 
         this.rig.position.copy(s.vehicleGroup.position).add(OFFSET_JUGADOR);
+        this.rig.updateMatrixWorld(true);
+        this._colocarConsola();
 
+        // Orientación de la cabeza (giroscopio o arrastre)
         if (this.conSensor) {
-            s.camera.quaternion.copy(this.qOffset).multiply(this.qSensor);
+            this.qVista.copy(this.qOffset).multiply(this.qSensor);
         } else {
-            s.camera.quaternion.setFromEuler(new THREE.Euler(this.arrastre.pitch, this.arrastre.yaw, 0, 'YXZ'));
+            this.qVista.setFromEuler(new THREE.Euler(this.arrastre.pitch, this.arrastre.yaw, 0, 'YXZ'));
         }
+
+        // Recentrado: el escenario (excavadora + consola) se reacomoda hacia donde miras si te giras demasiado
+        const rumboCabeza = rumbo(this.qVista);
+        if (this._centrarAhora) {
+            this.yawCorreccion = rumboCabeza;
+            this.recentrando = false;
+            this._centrarAhora = false;
+        }
+        const desvio = envolver(rumboCabeza - this.yawCorreccion);
+        if (Math.abs(desvio) > ZONA_LIBRE) this.recentrando = true;
+        if (this.recentrando) {
+            this.yawCorreccion = envolver(this.yawCorreccion + desvio * Math.min(1, dt * VELOCIDAD_RECENTRADO));
+            if (Math.abs(desvio) < 0.03) this.recentrando = false;
+        }
+        this.qYaw.setFromAxisAngle(_ejeY, -this.yawCorreccion);
+        s.camera.quaternion.copy(this.qYaw).multiply(this.qVista);
         if (this.mira.parent !== s.camera) s.camera.add(this.mira);
 
         // Mirada: primero contra los botones 3D de Consola3D, luego contra los auxiliares (Centrar/Salir)
