@@ -2774,3 +2774,156 @@ body.vr-mode-pc #vista-control .area-ia.con-modo .ia-cab {
 }
 
 
+
+/* =====================================================================
+   CELULAR VERTICAL · VISTA CONTROL (rediseño)
+   Botones grandes y fáciles de tocar; la excavadora 3D queda pequeña,
+   como fondo, en la ventana superior.
+   ===================================================================== */
+@media (max-width: 767px) and (orientation: portrait) {
+    body[data-view="control"] .app-footer { display: none !important; }
+
+    body[data-view="control"] .app-main { padding: .3rem .5rem calc(.4rem + env(safe-area-inset-bottom, 0)) !important; }
+
+    body[data-view="control"] .vista-control {
+        display: grid !important;
+        height: 100%;
+        grid-template-columns: 1fr 1fr;
+        grid-template-rows: minmax(70px, 1fr) auto auto auto auto;
+        grid-template-areas:
+            "hint  hint"
+            "acc   acc"
+            "arm   drive"
+            "ia    ia"
+            "demo  demo";
+        gap: .4rem;
+    }
+    body[data-view="control"] .area-hint { grid-area: hint; display: block !important; pointer-events: none; }
+    body[data-view="control"] .area-hint * { display: none; }
+    body[data-view="control"] .area-acc   { grid-area: acc; }
+    body[data-view="control"] .area-arm   { grid-area: arm; }
+    body[data-view="control"] .area-drive { grid-area: drive; }
+    body[data-view="control"] .area-ia    { grid-area: ia; }
+    body[data-view="control"] .area-demo  { grid-area: demo; }
+
+    body[data-view="control"] .vista-control .panel {
+        padding: .45rem .5rem;
+        border-radius: 16px;
+        background: linear-gradient(180deg, rgba(14, 21, 42, .78), rgba(8, 13, 28, .86));
+    }
+
+    /* Accesorios: 3 botones grandes en una fila */
+    body[data-view="control"] .area-acc .panel-title { display: none; }
+    body[data-view="control"] .commands-grid { gap: .4rem; }
+    body[data-view="control"] .cmd-btn {
+        min-height: 48px;
+        height: 48px;
+        font-size: .8rem;
+        gap: .4rem;
+        border-radius: 13px;
+        padding: .25rem .4rem;
+    }
+    body[data-view="control"] .cmd-ico {
+        width: 1.9rem;
+        height: 1.9rem;
+        font-size: 1.05rem;
+        border-radius: 8px;
+    }
+
+    /* Cruces de Brazo y Movimiento: ocupan todo el ancho de su panel */
+    body[data-view="control"] .pad-panel {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: flex-start;
+        gap: .4rem;
+        padding: .45rem .4rem .5rem;
+    }
+    body[data-view="control"] .pad-panel .pad-title {
+        font-size: .76rem;
+        margin: 0;
+    }
+    body[data-view="control"] .dpad-grid {
+        width: min(100%, clamp(132px, 23dvh, 182px));
+        max-width: none;
+        aspect-ratio: 1 / 1;
+        gap: .3rem;
+        margin: 0 auto;
+    }
+    body[data-view="control"] .area-arm .dpad-grid { margin-block: auto; }
+    body[data-view="control"] .dir-btn {
+        font-size: .64rem;
+        font-weight: 700;
+        border-radius: 13px;
+        padding: .15rem;
+        gap: .1rem;
+        line-height: 1.05;
+    }
+    body[data-view="control"] .dir-btn i { font-size: 1.45rem; }
+    body[data-view="control"] .dpad-center { font-size: 1.2rem; border-radius: 13px; }
+
+    /* Velocímetro en una línea y botón Detener grande */
+    body[data-view="control"] .velocimetro {
+        width: 100%;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: .2rem .5rem;
+        border-radius: 10px;
+    }
+    body[data-view="control"] .velocimetro .velo-cab,
+    body[data-view="control"] .velocimetro .velo-barra,
+    body[data-view="control"] .velocimetro .velo-estado { display: none; }
+    body[data-view="control"] .velocimetro .velo-top { order: 2; }
+    body[data-view="control"] .velo-valor { margin: 0; }
+    body[data-view="control"] .velo-valor span { font-size: 1.05rem; }
+    body[data-view="control"] .btn-stop {
+        width: 100%;
+        min-height: 46px;
+        height: 46px;
+        margin-top: 0;
+        font-size: .95rem;
+        border-radius: 13px;
+    }
+    body[data-view="control"] .btn-stop i { font-size: 1.1rem; }
+
+    /* Control con IA */
+    body[data-view="control"] .area-ia .ia-cab,
+    body[data-view="control"] .area-ia .ia-estado { display: none; }
+    body[data-view="control"] .ia-modos { gap: .4rem; }
+    body[data-view="control"] .ia-btn {
+        min-height: 44px;
+        height: 44px;
+        font-size: .76rem;
+        border-radius: 12px;
+    }
+
+    /* Secuencias demo */
+    body[data-view="control"] .area-demo .panel-title,
+    body[data-view="control"] .area-demo .demo-caption { display: none; }
+    body[data-view="control"] .demo-row {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) minmax(0, 1.15fr);
+        gap: .4rem;
+        align-items: center;
+    }
+    body[data-view="control"] .demo-select {
+        min-height: 44px;
+        height: 44px;
+        font-size: .74rem;
+        border-radius: 12px;
+    }
+    body[data-view="control"] .demo-actions { display: grid; grid-template-columns: 1fr 1fr; gap: .35rem; }
+    body[data-view="control"] .btn-demo {
+        min-height: 44px;
+        height: 44px;
+        font-size: .76rem;
+        border-radius: 12px;
+        padding: 0 .3rem;
+        min-width: 0;
+        gap: .3rem;
+        white-space: nowrap;
+        overflow: hidden;
+    }
+    body[data-view="control"] .demo-picker { min-width: 0; }
+}

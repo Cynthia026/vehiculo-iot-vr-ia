@@ -41,7 +41,7 @@ export class Scene3DManager {
         this.controls.dampingFactor = 0.06;
         this.controls.target.copy(this.defaultTarget);
         this.controls.minDistance = 1.6;
-        this.controls.maxDistance = 9.5;
+        this.controls.maxDistance = 13;
         this.controls.maxPolarAngle = Math.PI * 0.48;
         // Si el usuario rota la cámara con el vehículo quieto, se respeta su vista
         this.controls.addEventListener('start', () => {
@@ -148,10 +148,10 @@ export class Scene3DManager {
         }
     }
 
-    // En pantallas verticales (celular) la cámara se aleja para que la excavadora quepa completa
+    // En pantallas verticales (celular) la cámara se aleja: la excavadora queda pequeña, como fondo, sobre los controles
     _camPosParaPantalla() {
         const aspect = window.innerWidth / window.innerHeight;
-        return this.defaultCamPos.clone().multiplyScalar(aspect < 1 ? 1.48 : 1);
+        return this.defaultCamPos.clone().multiplyScalar(aspect < 1 ? 2.15 : 1);
     }
 
     _initLights() {

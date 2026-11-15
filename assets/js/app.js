@@ -88,10 +88,10 @@ async function inicializar() {
         let vrManager = null;
         let consola3d = null;
         try {
-            const { Scene3DManager } = await import('./scene3d.js?v=28');
+            const { Scene3DManager } = await import('./scene3d.js?v=32');
             const { VRManager } = await import('./vr-controls.js?v=31');
             const { Consola3D } = await import('./botones3d.js?v=31');
-            const { VRCelular, vrCelularDisponible } = await import('./vr-celular.js?v=31');
+            const { VRCelular } = await import('./vr-celular.js?v=32');
             scene3d = new Scene3DManager('three-canvas');
 
             const callbacksBotones = {
@@ -127,7 +127,7 @@ async function inicializar() {
                 alSalir: () => ui.showFeedback('Saliste de VR celular', 'info', 2000)
             }, consola3d);
             ui.vrCelular = vrCelular;
-            configurarVRCelular(vrCelularDisponible);
+            configurarVRCelular();
 
             vrManager = new VRManager(scene3d, {
                 onPressCommand: (normCmd, isInstant = false) => callbacksBotones.onPress(normCmd, isInstant),
@@ -502,16 +502,10 @@ function configurarControlIA() {
 
 // --- VR CELULAR (Cardboard) --------------------------------------------------------
 
-async function configurarVRCelular(disponible) {
-    const btn = document.getElementById('btn-vr-celular');
+async function configurarVRCelular() {
+    // El VR celular se abre desde el botón "Modo VR" (en celulares); aquí solo se conectan sus diálogos
     const intro = document.getElementById('vrc-intro');
-    if (!btn || !(await disponible())) return;
-    btn.classList.remove('d-none');
-
-    btn.addEventListener('click', () => {
-        ui.playSound('tap');
-        intro.classList.remove('d-none');
-    });
+    if (!intro) return;
     document.getElementById('vrc-cancelar').addEventListener('click', () => intro.classList.add('d-none'));
     document.getElementById('vrc-comenzar').addEventListener('click', async () => {
         intro.classList.add('d-none');
