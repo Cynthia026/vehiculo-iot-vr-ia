@@ -2934,3 +2934,65 @@ body.vr-mode-pc #vista-control .area-ia.con-modo .ia-cab {
     }
     body[data-view="control"] .demo-picker { min-width: 0; }
 }
+
+
+/* =====================================================================
+   PIE DE PÁGINA · ENLACES A LINKEDIN Y GITHUB
+   ===================================================================== */
+.app-footer {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-wrap: wrap;
+    gap: .25rem .7rem;
+}
+.footer-redes {
+    display: inline-flex;
+    align-items: center;
+    gap: .45rem;
+    flex-shrink: 0;
+}
+.footer-red {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 1.75rem;
+    height: 1.75rem;
+    border-radius: 50%;
+    font-size: .9rem;
+    color: var(--muted);
+    background: rgba(255, 255, 255, .06);
+    border: 1px solid var(--line);
+    text-decoration: none;
+    transition: color .2s ease, background .2s ease, transform .2s ease, box-shadow .2s ease;
+}
+.footer-red:hover,
+.footer-red:focus-visible {
+    transform: translateY(-1px);
+    color: #fff;
+    outline: none;
+}
+.footer-red-linkedin:hover,
+.footer-red-linkedin:focus-visible {
+    background: #0a66c2;
+    border-color: #0a66c2;
+    box-shadow: 0 0 12px rgba(10, 102, 194, .55);
+}
+.footer-red-github:hover,
+.footer-red-github:focus-visible {
+    background: #24292f;
+    border-color: #6e7681;
+    box-shadow: 0 0 12px rgba(110, 118, 129, .5);
+}
+
+/* Celular vertical en Control: íconos compactos junto a los créditos */
+@media (max-width: 767px) and (orientation: portrait) {
+    body[data-view="control"] .app-footer {
+        display: flex !important;
+        flex-wrap: nowrap;
+        gap: .4rem;
+        text-align: left;
+    }
+    body[data-view="control"] .footer-creditos { flex: 1 1 auto; min-width: 0; }
+    body[data-view="control"] .footer-red { width: 1.45rem; height: 1.45rem; font-size: .72rem; }
+}
