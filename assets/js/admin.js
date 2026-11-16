@@ -225,9 +225,19 @@ class AdminManager {
         const sigueVisible = visibles.some((u) => Number(u.id_vehiculo) === actual);
         if (visibles.length && (forzar || !sigueVisible)) {
             await this.seleccionarUnidadActiva(visibles[0].id_vehiculo, false);
-        } else if (!visibles.length) {
-            this.actualizarBadgeSesionCabecera();
+            return;
         }
+        // La unidad activa no cambió (p. ej. al recargar con sesión): sólo se actualiza la cabecera
+        const sub = document.getElementById('header-unit-subtitle');
+        if (sub) {
+            if (visibles.length) {
+                const u = this.obtenerUnidadEnriquecida(actual);
+                sub.textContent = `${u.nombre} · ${u.numero_serie} (${u.estado_comercial})`;
+            } else {
+                sub.textContent = this.errorCarga ? 'Sin datos de unidades' : 'Sin unidades disponibles';
+            }
+        }
+        this.actualizarBadgeSesionCabecera();
     }
 
     obtenerUnidadEnriquecida(idVehiculo) {
