@@ -2996,3 +2996,17 @@ body.vr-mode-pc #vista-control .area-ia.con-modo .ia-cab {
     body[data-view="control"] .footer-creditos { flex: 1 1 auto; min-width: 0; }
     body[data-view="control"] .footer-red { width: 1.45rem; height: 1.45rem; font-size: .72rem; }
 }
+
+/* ---------- Préstamo del vehículo físico a Invitados ---------- */
+.solicitud-item,
+.prestamo-activo,
+.solicitud-espera {
+    background: rgba(10, 16, 34, .65);
+    border: 1px solid rgba(255, 180, 58, .35);
+    border-radius: 12px;
+    padding: .5rem .8rem;
+    font-size: .85rem;
+}
+.solicitud-item + .solicitud-item { margin-top: .4rem; }
+.prestamo-activo { border-color: rgba(61, 220, 151, .5); background: rgba(61, 220, 151, .08); }
+#panel-solicitudes-fisico { border-color: rgba(255, 180, 58, .35); }

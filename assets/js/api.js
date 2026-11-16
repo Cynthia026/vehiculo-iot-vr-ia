@@ -188,6 +188,35 @@ class ApiClient {
         return this.get('/api/auth/me');
     }
 
+    // --- Préstamo del vehículo físico a un Invitado (requiere aprobación del Administrador) ---
+    async solicitarVehiculoFisico(nombreVisitante) {
+        return this.requestJson('POST', '/api/auth/invitado/solicitud', { nombre_visitante: nombreVisitante });
+    }
+
+    async consultarSolicitudFisico(codigo) {
+        return this.requestJson('GET', `/api/auth/invitado/solicitud/${encodeURIComponent(codigo)}`);
+    }
+
+    async cancelarSolicitudFisico(codigo) {
+        return this.requestJson('DELETE', `/api/auth/invitado/solicitud/${encodeURIComponent(codigo)}`);
+    }
+
+    async obtenerSolicitudesInvitado() {
+        return this.requestJson('GET', '/api/admin/solicitudes-invitado');
+    }
+
+    async aprobarSolicitudInvitado(idSolicitud) {
+        return this.requestJson('POST', `/api/admin/solicitudes-invitado/${idSolicitud}/aprobar`);
+    }
+
+    async rechazarSolicitudInvitado(idSolicitud) {
+        return this.requestJson('POST', `/api/admin/solicitudes-invitado/${idSolicitud}/rechazar`);
+    }
+
+    async terminarPrestamoFisico() {
+        return this.requestJson('POST', '/api/admin/prestamo-fisico/terminar');
+    }
+
     async logout() {
         return this.requestJson('POST', '/api/auth/logout');
     }

@@ -4,11 +4,18 @@
 //   obtener se muestra "Sin datos" o el error real: NUNCA se simula un éxito en memoria.
 // - El acceso exige sesión real (JWT): Administrador / Usuario con contraseña, o Invitado temporal.
 // - La seguridad real está en el servidor; aquí sólo se ocultan opciones y se explica el resultado.
-import { api } from './api.js?v=36';
+import { api } from './api.js?v=37';
 import { CONFIG } from './config.js?v=29';
 import { ui, normalizar } from './ui.js?v=29';
 
 const SESSION_TOKEN_KEY = 'vehiculo_iot_jwt_session';
+const SOLICITUD_KEY = 'vehiculo_iot_solicitud_fisico';   // solicitud en espera (sobrevive a recargar la página)
+const PRESTAMO = 'PRESTAMO_FISICO';
+
+const mmss = (seg) => {
+    const s = Math.max(0, Math.floor(Number(seg) || 0));
+    return `${String(Math.floor(s / 60)).padStart(2, '0')}:${String(s % 60).padStart(2, '0')}`;
+};
 
 try {
     // Restos de versiones anteriores que guardaban estado simulado
@@ -34,7 +41,9 @@ class AdminManager {
             clientes: [],
             auditoria: [],
             sesionesActivas: [],
-            reservaInvitado: null
+            reservaInvitado: null,
+            solicitudFisico: null,      // visitante: { codigo, nombre, estado, creada_ts }
+            panelPrestamo: null         // admin: respuesta de /api/admin/solicitudes-invitado
         };
         this.sesion = null;            // { id_usuario, nombre, email, rol }
         this.unidadesRds = [];         // unidades visibles para la sesión actual (filtradas por el servidor)
@@ -45,6 +54,10 @@ class AdminManager {
         this.idUnidadComandosSel = null;
         this.idDemoSeleccionada = null;
         this.guestInterval = null;
+        this.solicitudInterval = null;
+        this.adminSolicitudesInterval = null;
+        this.adminRelojInterval = null;
+        this._pendientesVistos = null;
         this.onUnitChanged = null;
         this.onStopVehicle = null;
     }
@@ -69,6 +82,7 @@ class AdminManager {
                             id_vehiculo: me.usuario.id_vehiculo_reservado,
                             nombre_vehiculo: me.unidades?.[0]?.nombre || `Unidad #${me.usuario.id_vehiculo_reservado}`,
                             operador: me.usuario.nombre,
+                            tipo_sesion: me.usuario.tipo_sesion || 'INVITADO',
                             expira_ts: Date.now() + Number(me.usuario.segundos_restantes) * 1000,
                             activa: true
                         };
@@ -81,6 +95,17 @@ class AdminManager {
         }
 
         await this.sincronizarDesdeRds({ elegirUnidad: true });
+
+        // Si el visitante recargó la página mientras esperaba la aprobación, se sigue esperando
+        if (!this.sesion) {
+            try {
+                const pend = JSON.parse(sessionStorage.getItem(SOLICITUD_KEY) || 'null');
+                if (pend?.codigo) {
+                    this.state.solicitudFisico = pend;
+                    this._iniciarSondeoSolicitud();
+                }
+            } catch (_) {}
+        }
     }
 
     _limpiarSesionLocal() {
@@ -106,6 +131,10 @@ class AdminManager {
 
     async iniciarSesionInvitadoReal(nombreVisitante = 'Visitante Showroom') {
         const res = await api.iniciarSesionInvitado(nombreVisitante);
+        await this._aplicarSesionInvitado(res, nombreVisitante, 'Prueba de exhibición iniciada: tienes 3 minutos');
+    }
+
+    async _aplicarSesionInvitado(res, nombreVisitante, mensaje) {
         CONFIG.setAuthToken(res.access_token);
         sessionStorage.setItem(SESSION_TOKEN_KEY, res.access_token);
         this.sesion = res.usuario;
@@ -115,6 +144,7 @@ class AdminManager {
             id_vehiculo: idExh,
             nombre_vehiculo: res.reserva?.nombre_vehiculo || `Unidad #${idExh}`,
             operador: nombreVisitante,
+            tipo_sesion: res.reserva?.tipo_sesion || res.usuario?.tipo_sesion || 'INVITADO',
             expira_ts: Date.now() + segRestantes * 1000,
             activa: true
         };
@@ -123,7 +153,191 @@ class AdminManager {
         if (idExh) await this.seleccionarUnidadActiva(idExh, false);
         this.renderizarTodo();
         ui.playSound('start');
-        ui.showFeedback('Prueba de exhibición iniciada: tienes 3 minutos', 'success', 3000);
+        ui.showFeedback(mensaje, 'success', 3500);
+    }
+
+    // ------------------------------------------------------------------ vehículo físico: lado del visitante
+
+    async solicitarVehiculoFisico(nombre) {
+        if (this.state.solicitudFisico) {
+            ui.showFeedback('Ya tienes una solicitud en espera', 'info', 2500);
+            return;
+        }
+        const r = await api.solicitarVehiculoFisico(nombre);
+        this.state.solicitudFisico = { codigo: r.codigo, nombre, estado: 'PENDIENTE', vehiculo: r.nombre_vehiculo, creada_ts: Date.now() };
+        try { sessionStorage.setItem(SOLICITUD_KEY, JSON.stringify(this.state.solicitudFisico)); } catch (_) {}
+        ui.playSound('tap');
+        ui.showFeedback('Solicitud enviada: espera a que el administrador la apruebe', 'info', 3500);
+        this._iniciarSondeoSolicitud();
+    }
+
+    _iniciarSondeoSolicitud() {
+        clearInterval(this.solicitudInterval);
+        this.renderSolicitudVisitante();
+        this.solicitudInterval = setInterval(() => this._consultarSolicitud(), 3000);
+        this._consultarSolicitud();
+    }
+
+    _terminarSolicitud(mensaje, tipo = 'warning') {
+        clearInterval(this.solicitudInterval);
+        this.solicitudInterval = null;
+        this.state.solicitudFisico = null;
+        try { sessionStorage.removeItem(SOLICITUD_KEY); } catch (_) {}
+        this.renderSolicitudVisitante();
+        if (mensaje) {
+            ui.playSound(tipo === 'success' ? 'start' : 'cancel');
+            ui.showFeedback(mensaje, tipo, 4500);
+        }
+    }
+
+    async _consultarSolicitud() {
+        const sol = this.state.solicitudFisico;
+        if (!sol || this._consultando) return;
+        this._consultando = true;
+        try {
+            const r = await api.consultarSolicitudFisico(sol.codigo);
+            if (r.estado === 'APROBADA' && r.access_token) {
+                this._terminarSolicitud(null);
+                await this._aplicarSesionInvitado(r, sol.nombre, '¡Aprobado! Ya puedes manejar el vehículo físico durante 3 minutos');
+                document.getElementById('btn-tab-control')?.click();
+                return;
+            }
+            const finales = {
+                RECHAZADA: 'El administrador rechazó tu solicitud',
+                EXPIRADA: 'Tu solicitud expiró: nadie la respondió en 5 minutos',
+                CANCELADA: 'Solicitud cancelada',
+                FINALIZADA: 'El préstamo ya terminó',
+                APROBADA: 'El acceso ya se entregó en otro navegador'
+            };
+            if (finales[r.estado]) {
+                this._terminarSolicitud(finales[r.estado], 'warning');
+                return;
+            }
+            sol.estado = r.estado;
+            this.renderSolicitudVisitante();
+        } catch (err) {
+            if (err.status === 404) this._terminarSolicitud('La solicitud ya no existe', 'warning');
+            // Sin conexión: se reintenta en el siguiente ciclo
+        } finally {
+            this._consultando = false;
+        }
+    }
+
+    async cancelarSolicitudFisico() {
+        const sol = this.state.solicitudFisico;
+        if (!sol) return;
+        try { await api.cancelarSolicitudFisico(sol.codigo); } catch (_) {}
+        this._terminarSolicitud('Solicitud cancelada', 'info');
+    }
+
+    renderSolicitudVisitante() {
+        const box = document.getElementById('guest-solicitud-status');
+        if (!box) return;
+        const sol = this.state.solicitudFisico;
+        box.classList.toggle('d-none', !sol);
+        document.querySelectorAll('#form-auth-guest button').forEach((b) => { b.disabled = Boolean(sol); });
+        if (!sol) { box.innerHTML = ''; return; }
+        const espera = Math.floor((Date.now() - (sol.creada_ts || Date.now())) / 1000);
+        box.innerHTML = `
+            <div class="solicitud-espera d-flex flex-wrap align-items-center justify-content-between gap-2">
+                <span class="small"><span class="spinner-border spinner-border-sm text-warning me-1" role="status"></span>
+                    Esperando aprobación del administrador para <b>${esc(sol.vehiculo || 'el vehículo físico')}</b> · ${mmss(espera)}</span>
+                <button type="button" class="btn btn-sm btn-outline-danger py-0 px-2" data-action="cancelar-solicitud-fisico"><i class="bi bi-x-circle"></i> Cancelar</button>
+            </div>`;
+        const cancelar = box.querySelector('[data-action="cancelar-solicitud-fisico"]');
+        if (cancelar) cancelar.disabled = false;
+    }
+
+    // ------------------------------------------------------------------ vehículo físico: lado del Administrador
+
+    _controlarSondeoAdmin(activo) {
+        if (activo && !this.adminSolicitudesInterval) {
+            this.adminSolicitudesInterval = setInterval(() => {
+                if (document.visibilityState === 'visible') this.cargarSolicitudesAdmin();
+            }, 4000);
+            this.adminRelojInterval = setInterval(() => this._tickRelojPrestamo(), 1000);
+            this.cargarSolicitudesAdmin();
+        } else if (!activo && this.adminSolicitudesInterval) {
+            clearInterval(this.adminSolicitudesInterval);
+            clearInterval(this.adminRelojInterval);
+            this.adminSolicitudesInterval = null;
+            this.adminRelojInterval = null;
+            this._pendientesVistos = null;
+            this.state.panelPrestamo = null;
+        }
+    }
+
+    async cargarSolicitudesAdmin() {
+        if (this.sesion?.rol !== 'ADMIN') return;
+        try {
+            const r = await api.obtenerSolicitudesInvitado();
+            r._recibido_ts = Date.now();
+            const ids = new Set((r.pendientes || []).map((p) => p.id_solicitud));
+            if (this._pendientesVistos) {
+                const nuevas = (r.pendientes || []).filter((p) => !this._pendientesVistos.has(p.id_solicitud));
+                if (nuevas.length) {
+                    ui.playSound('start');
+                    ui.showFeedback(`Nueva solicitud: ${nuevas[0].nombre_visitante} quiere manejar el vehículo físico`, 'warning', 5000);
+                }
+            }
+            const habiaPrestamo = Boolean(this.state.panelPrestamo?.prestamo_activo);
+            this._pendientesVistos = ids;
+            this.state.panelPrestamo = r;
+            this.renderSolicitudesAdmin();
+            // Cuando termina un préstamo se recargan métricas y bitácora
+            if (habiaPrestamo && !r.prestamo_activo) this.sincronizarDesdeRds();
+        } catch (err) {
+            this.state.panelPrestamo = { error: err.status ? `HTTP ${err.status}: ${err.message}` : 'Sin conexión con AWS' };
+            this.renderSolicitudesAdmin();
+        }
+    }
+
+    _tickRelojPrestamo() {
+        const el = document.getElementById('prestamo-countdown');
+        const p = this.state.panelPrestamo;
+        if (!el || !p?.prestamo_activo) return;
+        const rest = Number(p.prestamo_activo.segundos_restantes) - (Date.now() - p._recibido_ts) / 1000;
+        el.textContent = mmss(rest);
+    }
+
+    renderSolicitudesAdmin() {
+        const cont = document.getElementById('admin-solicitudes-fisico');
+        if (!cont) return;
+        const p = this.state.panelPrestamo;
+        if (!p) { cont.innerHTML = '<div class="small text-secondary">Cargando solicitudes…</div>'; return; }
+        if (p.error) { cont.innerHTML = `<div class="small text-warning"><i class="bi bi-database-x"></i> Sin datos: ${esc(p.error)}</div>`; return; }
+        const u = p.unidad_fisica || {};
+        const pendientes = p.pendientes || [];
+        const prestamo = p.prestamo_activo;
+        const cabecera = `
+            <div class="small text-secondary mb-2">
+                <i class="bi bi-cpu"></i> Carrito real: <b class="text-light">#${esc(u.id_vehiculo)} ${esc(u.nombre || '')}</b>
+                ${u.nombre_propietario ? ` · dueño: <b class="text-light">${esc(u.nombre_propietario)}</b> (queda bloqueado mientras dura el préstamo)` : ''}
+            </div>`;
+        const enCurso = prestamo ? `
+            <div class="prestamo-activo d-flex flex-wrap align-items-center justify-content-between gap-2 mb-2">
+                <div>
+                    <span class="badge bg-success me-1"><i class="bi bi-broadcast-pin"></i> EN CURSO</span>
+                    <b>${esc(prestamo.nombre_operador)}</b> está manejando el vehículo físico
+                </div>
+                <div class="d-flex align-items-center gap-2">
+                    <span class="badge bg-warning text-dark fs-6"><i class="bi bi-stopwatch"></i> <span id="prestamo-countdown">${mmss(prestamo.segundos_restantes)}</span></span>
+                    <button type="button" class="btn btn-sm btn-outline-danger py-0 px-2" data-action="terminar-prestamo"><i class="bi bi-stop-circle"></i> Terminar y detener</button>
+                </div>
+            </div>` : '';
+        const lista = pendientes.length ? pendientes.map((s) => `
+            <div class="solicitud-item d-flex flex-wrap align-items-center justify-content-between gap-2">
+                <div>
+                    <span class="badge bg-warning text-dark me-1">PENDIENTE</span>
+                    <b>${esc(s.nombre_visitante)}</b>
+                    <span class="small text-secondary">· esperando ${mmss(s.segundos_esperando)}</span>
+                </div>
+                <div class="d-flex gap-1">
+                    <button type="button" class="btn btn-sm btn-success py-0 px-2" data-action="aprobar-solicitud" data-id="${s.id_solicitud}" ${prestamo ? 'disabled title="Espera a que termine el préstamo en curso"' : ''}><i class="bi bi-check-lg"></i> Aprobar 3 min</button>
+                    <button type="button" class="btn btn-sm btn-outline-danger py-0 px-2" data-action="rechazar-solicitud" data-id="${s.id_solicitud}"><i class="bi bi-x-lg"></i> Rechazar</button>
+                </div>
+            </div>`).join('') : `<div class="small text-secondary"><i class="bi bi-inbox"></i> ${prestamo ? 'No hay más visitantes esperando.' : 'Sin solicitudes en espera. Cuando un visitante pida el vehículo físico aparecerá aquí.'}</div>`;
+        cont.innerHTML = cabecera + enCurso + lista;
     }
 
     async cerrarSesionActual() {
@@ -151,13 +365,27 @@ class AdminManager {
             const mmss = `${String(Math.floor(restSeg / 60)).padStart(2, '0')}:${String(restSeg % 60).padStart(2, '0')}`;
             if (badge) badge.textContent = mmss;
             if (headerRole && this.sesion?.rol === 'INVITADO') headerRole.textContent = `INVITADO (${mmss})`;
-            if (restSeg <= 0) this.finalizarReservaInvitado(true);
+            if (restSeg <= 0) {
+                this.finalizarReservaInvitado(true);
+                return;
+            }
+            // Cada 5 s se confirma con el servidor (el Administrador puede terminar el préstamo antes)
+            if (restSeg % 5 === 0 && !this._verificandoInvitado) {
+                this._verificandoInvitado = true;
+                api.obtenerPerfilActual()
+                    .catch((err) => {
+                        if (err.status === 401 && this.state.reservaInvitado?.activa) {
+                            this.finalizarReservaInvitado(false, 'El administrador terminó tu sesión: el vehículo se detuvo');
+                        }
+                    })
+                    .finally(() => { this._verificandoInvitado = false; });
+            }
         };
         actualizarReloj();
         this.guestInterval = setInterval(actualizarReloj, 1000);
     }
 
-    async finalizarReservaInvitado(porExpiracion = false) {
+    async finalizarReservaInvitado(porExpiracion = false, mensaje = null) {
         clearInterval(this.guestInterval);
         const res = this.state.reservaInvitado;
         if (res && res.activa) {
@@ -169,7 +397,7 @@ class AdminManager {
             try { await api.logout(); } catch (_) {}
             this._limpiarSesionLocal();
             ui.showFeedback(
-                porExpiracion ? 'Tu prueba de Invitado terminó: el vehículo se detuvo' : 'Prueba finalizada y vehículo detenido',
+                mensaje || (porExpiracion ? 'Tu prueba de Invitado terminó: el vehículo se detuvo' : 'Prueba finalizada y vehículo detenido'),
                 'warning', 3800
             );
             await this.sincronizarDesdeRds({ elegirUnidad: true, forzarSeleccion: true });
@@ -197,8 +425,13 @@ class AdminManager {
                 const [mis, cat] = await Promise.all([api.obtenerMisVehiculos(), api.obtenerCatalogoPublico().catch(() => null)]);
                 this.unidadesRds = (Array.isArray(mis) ? mis : []).map((u) => ({ ...u, id_propietario: this.sesion.id_usuario }));
                 this.state.modelos = Array.isArray(cat?.modelos) ? cat.modelos : [];
+            } else if (rol === 'INVITADO') {
+                // Invitado: sólo la unidad que tiene reservada (exhibición o vehículo físico prestado)
+                const [mis, cat] = await Promise.all([api.obtenerMisVehiculos(), api.obtenerCatalogoPublico().catch(() => null)]);
+                this.unidadesRds = (Array.isArray(mis) ? mis : []).map((u) => ({ ...u, activo: 1 }));
+                this.state.modelos = Array.isArray(cat?.modelos) ? cat.modelos : [];
             } else {
-                // Sin sesión o Invitado: catálogo público y unidades de exhibición
+                // Sin sesión: catálogo público y unidades de exhibición
                 const cat = await api.obtenerCatalogoPublico();
                 this.state.modelos = Array.isArray(cat?.modelos) ? cat.modelos : [];
                 this.unidadesRds = (Array.isArray(cat?.unidades_exhibicion) ? cat.unidades_exhibicion : [])
@@ -380,7 +613,11 @@ class AdminManager {
             }
         }
 
+        this._controlarSondeoAdmin(rol === 'ADMIN');
+        this.renderSolicitudVisitante();
+
         if (rol === 'ADMIN') {
+            this.renderSolicitudesAdmin();
             this.renderMetricas();
             this.renderTablaModelos();
             this.renderTablaUnidades();
@@ -780,9 +1017,11 @@ class AdminManager {
             boxReserva.innerHTML = activa ? `
                 <div class="d-flex flex-wrap align-items-center justify-content-between gap-2">
                     <div>
-                        <span class="badge bg-success me-2"><i class="bi bi-broadcast-pin"></i> RESERVA EXCLUSIVA ACTIVA</span>
+                        <span class="badge ${res.tipo_sesion === PRESTAMO ? 'bg-warning text-dark' : 'bg-success'} me-2"><i class="bi ${res.tipo_sesion === PRESTAMO ? 'bi-truck-front-fill' : 'bi-broadcast-pin'}"></i> ${res.tipo_sesion === PRESTAMO ? 'VEHÍCULO FÍSICO PRESTADO' : 'RESERVA EXCLUSIVA ACTIVA'}</span>
                         <strong>${esc(res.nombre_vehiculo)}</strong> · Operador: <span class="text-info">${esc(res.operador)}</span>
-                        <div class="small text-secondary mt-1">Comandos disponibles: avanzar, retroceder, girar, luz, sonido y detener.</div>
+                        <div class="small text-secondary mt-1">${res.tipo_sesion === PRESTAMO
+                            ? 'Aprobado por el administrador: todos los comandos, voz, gestos, asistente IA y la demo de la empresa. Mueves el carrito real.'
+                            : 'Comandos disponibles: avanzar, retroceder, girar, luz, sonido y detener.'}</div>
                     </div>
                     <div class="d-flex align-items-center gap-2">
                         <span class="badge bg-warning text-dark fs-6"><i class="bi bi-stopwatch"></i> <span id="guest-countdown-timer">--:--</span></span>
@@ -928,6 +1167,36 @@ class AdminManager {
                         api.actualizarMovimientoDemo(b.id_demo_movimiento, { id_comando: b.id_comando, orden: a.orden, duracion_ms: b.duracion_ms, pausa_ms: b.pausa_ms })
                     ]), null, { recargar: false });
                     await this.cargarPasosDeDemoSeleccionada(this.idDemoSeleccionada);
+                    break;
+                }
+                case 'solicitar-vehiculo-fisico': {
+                    const nombre = document.getElementById('guest-login-name')?.value?.trim() || 'Visitante';
+                    actionEl.disabled = true;
+                    try {
+                        await this.solicitarVehiculoFisico(nombre);
+                    } catch (err) {
+                        actionEl.disabled = false;
+                        ui.playSound('cancel');
+                        ui.showFeedback(err.status ? `${err.status}: ${err.message}` : 'Sin conexión con AWS: no se envió la solicitud', 'danger', 4500);
+                    }
+                    break;
+                }
+                case 'cancelar-solicitud-fisico':
+                    await this.cancelarSolicitudFisico();
+                    break;
+                case 'aprobar-solicitud':
+                case 'rechazar-solicitud':
+                case 'terminar-prestamo': {
+                    if (action === 'terminar-prestamo' && !confirm('¿Terminar el préstamo? El vehículo físico se detendrá.')) break;
+                    actionEl.disabled = true;
+                    const llamada = {
+                        'aprobar-solicitud': () => api.aprobarSolicitudInvitado(id),
+                        'rechazar-solicitud': () => api.rechazarSolicitudInvitado(id),
+                        'terminar-prestamo': () => api.terminarPrestamoFisico()
+                    }[action];
+                    const r = await this._ejecutar(llamada, null);
+                    if (r?.mensaje) ui.showFeedback(r.mensaje, action === 'aprobar-solicitud' ? 'success' : 'info', 3500);
+                    await this.cargarSolicitudesAdmin();
                     break;
                 }
                 case 'ir-control-invitado':
