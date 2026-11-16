@@ -1,217 +1,73 @@
 // assets/js/admin.js
-import { api } from './api.js?v=29';
+// Módulo 4.3 · Administración IoT
+// - Todo lo que se muestra viene de Amazon RDS a través de FastAPI. Si un dato no se puede
+//   obtener se muestra "Sin datos" o el error real: NUNCA se simula un éxito en memoria.
+// - El acceso exige sesión real (JWT): Administrador / Usuario con contraseña, o Invitado temporal.
+// - La seguridad real está en el servidor; aquí sólo se ocultan opciones y se explica el resultado.
+import { api } from './api.js?v=36';
 import { CONFIG } from './config.js?v=29';
 import { ui, normalizar } from './ui.js?v=29';
 
 const SESSION_TOKEN_KEY = 'vehiculo_iot_jwt_session';
 
-// Limpiar cualquier estado antiguo que se haya guardado en localStorage en versiones previas
 try {
+    // Restos de versiones anteriores que guardaban estado simulado
     localStorage.removeItem('vehiculo_iot_admin_state_v1');
 } catch (_) {}
 
-// Estado base en memoria (con soporte_autorizado = false en Unidad #1 para cumplir el Caso de Prueba 4 -> 403)
-const PERFILES_DEMO = {
-    ADMIN: {
-        id_usuario: 1,
-        nombre: 'Administrador Empresa',
-        email: 'admin@vehiculoiot.com',
-        rol: 'ADMIN',
-        clave_perfil: 'ADMIN'
-    },
-    USUARIO_A: {
-        id_usuario: 2,
-        nombre: 'Cynthia Martínez',
-        email: 'cynthia@cliente.com',
-        rol: 'USUARIO',
-        clave_perfil: 'USUARIO_A'
-    },
-    USUARIO_B: {
-        id_usuario: 3,
-        nombre: 'Carlos López',
-        email: 'carlos@cliente.com',
-        rol: 'USUARIO',
-        clave_perfil: 'USUARIO_B'
-    },
-    INVITADO: {
-        id_usuario: 99,
-        nombre: 'Visitante Showroom',
-        email: 'invitado@showroom.iot',
-        rol: 'INVITADO',
-        clave_perfil: 'INVITADO'
-    }
-};
+// Escapa texto de la base de datos antes de insertarlo como HTML (evita XSS almacenado)
+const esc = (v) => String(v ?? '').replace(/[&<>"']/g, (c) => (
+    { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]
+));
 
-const COMANDOS_BASE_MEMORIA = [
-    { id_comando: 1, nombre: 'Avanzar', codigo: 'AVZ', activo: true },
-    { id_comando: 2, nombre: 'Retroceder', codigo: 'RET', activo: true },
-    { id_comando: 3, nombre: 'Girar izquierda', codigo: 'GIZ', activo: true },
-    { id_comando: 4, nombre: 'Girar derecha', codigo: 'GDE', activo: true },
-    { id_comando: 5, nombre: 'Subir brazo', codigo: 'SBR', activo: true },
-    { id_comando: 6, nombre: 'Bajar brazo', codigo: 'BBR', activo: true },
-    { id_comando: 7, nombre: 'Motor izquierda', codigo: 'MIZ', activo: true },
-    { id_comando: 8, nombre: 'Motor derecha', codigo: 'MDE', activo: true },
-    { id_comando: 9, nombre: 'Velocidad', codigo: 'VEL', activo: true },
-    { id_comando: 10, nombre: 'Sonido', codigo: 'SON', activo: true },
-    { id_comando: 11, nombre: 'Luz', codigo: 'LUZ', activo: true },
-    { id_comando: 12, nombre: 'Detener', codigo: 'STP', activo: true }
-];
+const SIN_DATOS = (cols, texto = 'Sin datos') =>
+    `<tr><td colspan="${cols}" class="text-center text-secondary py-2"><i class="bi bi-database-x"></i> ${esc(texto)}</td></tr>`;
 
-function crearEstadoInicialMemoria() {
-    return {
-        modelos: [
-            {
-                id_modelo: 1,
-                codigo_modelo: 'EXC-IOT-V1',
-                nombre: 'Excavadora IoT',
-                descripcion: 'Vehículo oruga con brazo hidráulico articulado, giro de cabina y accesorios luminosos/sonoros.',
-                microcontrolador_default: 'ESP8266',
-                tiene_brazo: true,
-                tiene_motores_giro: true,
-                activo: true
-            },
-            {
-                id_modelo: 2,
-                codigo_modelo: 'ROV-IOT-V1',
-                nombre: 'Rover Explorador IoT',
-                descripcion: 'Vehículo compacto de exploración 4WD con tracción diferencial, faros LED y telemetría.',
-                microcontrolador_default: 'ESP8266',
-                tiene_brazo: false,
-                tiene_motores_giro: true,
-                activo: true
-            }
-        ],
-        clientes: [
-            {
-                id_usuario: 2,
-                nombre: 'Cynthia Martínez',
-                email: 'cynthia@cliente.com',
-                rol: 'USUARIO'
-            },
-            {
-                id_usuario: 3,
-                nombre: 'Carlos López',
-                email: 'carlos@cliente.com',
-                rol: 'USUARIO'
-            }
-        ],
-        metaUnidades: {
-            1: {
-                id_modelo: 1,
-                numero_serie: 'SN-EXC-0001',
-                estado_comercial: 'VENDIDO',
-                id_propietario: 2,
-                soporte_autorizado: false,
-                soporte_expira_en: null
-            },
-            2: {
-                id_modelo: 1,
-                numero_serie: 'SN-EXC-DEMO-02',
-                estado_comercial: 'EXHIBICION',
-                id_propietario: null,
-                soporte_autorizado: false,
-                soporte_expira_en: null
-            },
-            3: {
-                id_modelo: 2,
-                numero_serie: 'SN-ROV-0003',
-                estado_comercial: 'VENDIDO',
-                id_propietario: 3,
-                soporte_autorizado: false,
-                soporte_expira_en: null
-            }
-        },
-        demosMemoria: [
-            {
-                id_demo: 1,
-                id_vehiculo: 1,
-                nombre: 'Recorrido cuadrado',
-                descripcion: 'Avanza y gira 90° cuatro veces formando un cuadrado.',
-                tipo_demo: 'EMPRESA',
-                pasos: [
-                    { id_demo_movimiento: 101, id_comando: 1, comando: 'Avanzar', orden: 1, duracion_ms: 1400, pausa_ms: 300 },
-                    { id_demo_movimiento: 102, id_comando: 4, comando: 'Girar derecha', orden: 2, duracion_ms: 900, pausa_ms: 300 },
-                    { id_demo_movimiento: 103, id_comando: 1, comando: 'Avanzar', orden: 3, duracion_ms: 1400, pausa_ms: 300 },
-                    { id_demo_movimiento: 104, id_comando: 4, comando: 'Girar derecha', orden: 4, duracion_ms: 900, pausa_ms: 300 }
-                ]
-            },
-            {
-                id_demo: 2,
-                id_vehiculo: 1,
-                nombre: 'Ciclo de excavación',
-                descripcion: 'Enciende luces, baja y sube el brazo, gira la cabina y avisa con el claxon.',
-                tipo_demo: 'EMPRESA',
-                pasos: [
-                    { id_demo_movimiento: 201, id_comando: 11, comando: 'Luz', orden: 1, duracion_ms: 600, pausa_ms: 200 },
-                    { id_demo_movimiento: 202, id_comando: 6, comando: 'Bajar brazo', orden: 2, duracion_ms: 1300, pausa_ms: 300 },
-                    { id_demo_movimiento: 203, id_comando: 5, comando: 'Subir brazo', orden: 3, duracion_ms: 1300, pausa_ms: 300 },
-                    { id_demo_movimiento: 204, id_comando: 7, comando: 'Motor izquierda', orden: 4, duracion_ms: 1100, pausa_ms: 300 }
-                ]
-            }
-        ],
-        reservaInvitado: null,
-        auditoria: [
-            {
-                accion: 'SISTEMA_RBAC_ACTIVO',
-                actor: 'Administrador Empresa',
-                rol: 'ADMIN',
-                detalle: 'Aislamiento BOLA/IDOR activo en Unidades #1, #2 y #3.',
-                fecha_hora: new Date().toISOString()
-            },
-            {
-                accion: 'SOPORTE_PRIVADO_403',
-                actor: 'Cynthia Martínez',
-                rol: 'USUARIO',
-                detalle: 'Unidad #1 (SN-EXC-0001) en modo privado del comprador.',
-                fecha_hora: new Date().toISOString()
-            }
-        ]
-    };
-}
+// Comando inexistente: las pruebas de seguridad lo usan para que, si el servidor llegara a autorizar,
+// responda 422 (comando no pertenece a la unidad) y el vehículo NUNCA se mueva.
+const ID_COMANDO_PRUEBA = 0;
 
 class AdminManager {
     constructor() {
-        this.state = crearEstadoInicialMemoria();
-        // Arranca con el perfil ADMIN activo para que todas las tablas y métricas se vean de inmediato
-        this.sesion = { ...PERFILES_DEMO.ADMIN };
-        this.unidadesRds = [
-            { id_vehiculo: 1, nombre: 'Unidad 1', modelo: 'Excavadora IoT', id_modelo: 1, microcontrolador: 'ESP8266', activo: true },
-            { id_vehiculo: 2, nombre: 'Unidad 2 - Showroom', modelo: 'Excavadora IoT', id_modelo: 1, microcontrolador: 'ESP8266', activo: true },
-            { id_vehiculo: 3, nombre: 'Unidad 3 - Rover', modelo: 'Rover Explorador IoT', id_modelo: 2, microcontrolador: 'ESP8266', activo: true }
-        ];
-        this.comandosUnidadAdmin = COMANDOS_BASE_MEMORIA.map(c => ({ ...c }));
+        this.state = {
+            modelos: [],
+            clientes: [],
+            auditoria: [],
+            sesionesActivas: [],
+            reservaInvitado: null
+        };
+        this.sesion = null;            // { id_usuario, nombre, email, rol }
+        this.unidadesRds = [];         // unidades visibles para la sesión actual (filtradas por el servidor)
+        this.errorCarga = null;        // último error real al leer RDS
+        this.comandosUnidadAdmin = [];
         this.demosUnidadEditor = [];
         this.movimientosDemoActual = [];
-        this.idUnidadComandosSel = 1;
-        this.idDemoSeleccionada = 1;
+        this.idUnidadComandosSel = null;
+        this.idDemoSeleccionada = null;
         this.guestInterval = null;
         this.onUnitChanged = null;
         this.onStopVehicle = null;
     }
 
+    // ------------------------------------------------------------------ arranque / sesión
+
     async init(callbacks = {}) {
         this.onUnitChanged = callbacks.onUnitChanged || null;
         this.onStopVehicle = callbacks.onStopVehicle || null;
         this._bindEvents();
-
-        // Renderizar de inmediato el estado inicial para que la vista de Administración nunca aparezca vacía
         this.renderizarTodo();
 
-        // Si existe un JWT en sessionStorage, validarlo contra GET /api/auth/me
         const savedToken = sessionStorage.getItem(SESSION_TOKEN_KEY);
         if (savedToken) {
             CONFIG.setAuthToken(savedToken);
             try {
                 const me = await api.obtenerPerfilActual();
-                if (me && me.usuario) {
+                if (me?.usuario) {
                     this.sesion = me.usuario;
-                    if (Array.isArray(me.unidades) && me.unidades.length > 0) {
-                        this.unidadesRds = me.unidades;
-                    }
                     if (this.sesion.rol === 'INVITADO' && me.usuario.segundos_restantes) {
                         this.state.reservaInvitado = {
-                            id_vehiculo: me.usuario.id_vehiculo_reservado || 2,
-                            nombre_vehiculo: me.unidades?.[0]?.nombre || 'Unidad Exhibición',
+                            id_vehiculo: me.usuario.id_vehiculo_reservado,
+                            nombre_vehiculo: me.unidades?.[0]?.nombre || `Unidad #${me.usuario.id_vehiculo_reservado}`,
                             operador: me.usuario.nombre,
                             expira_ts: Date.now() + Number(me.usuario.segundos_restantes) * 1000,
                             activa: true
@@ -220,292 +76,64 @@ class AdminManager {
                     }
                 }
             } catch (_) {
-                sessionStorage.removeItem(SESSION_TOKEN_KEY);
-                CONFIG.setAuthToken(null);
+                this._limpiarSesionLocal();
             }
         }
 
-        this.renderizarTodo();
+        await this.sincronizarDesdeRds({ elegirUnidad: true });
     }
 
-    async cambiarPerfilRapido(clavePerfil) {
-        const base = PERFILES_DEMO[clavePerfil] || PERFILES_DEMO.ADMIN;
-        this.sesion = { ...base };
-
-        if (clavePerfil === 'INVITADO') {
-            if (!this.state.reservaInvitado || !this.state.reservaInvitado.activa) {
-                this.state.reservaInvitado = {
-                    id_vehiculo: 2,
-                    nombre_vehiculo: 'Unidad 2 - Showroom',
-                    operador: this.sesion.nombre,
-                    expira_ts: Date.now() + 180 * 1000,
-                    activa: true
-                };
-                this._iniciarRelojInvitado();
-            }
-            await this.seleccionarUnidadActiva(2, false);
-        } else if (clavePerfil === 'USUARIO_A') {
-            await this.seleccionarUnidadActiva(1, false);
-        } else if (clavePerfil === 'USUARIO_B') {
-            await this.seleccionarUnidadActiva(3, false);
-        } else {
-            await this.seleccionarUnidadActiva(1, false);
-        }
-
-        this.renderizarTodo();
-        ui.playSound('tap');
-        ui.showFeedback(`Perfil activo: ${this.sesion.nombre} (${this.sesion.rol})`, 'info', 2200);
-    }
-
-    // Valida permisos tanto antes de enviar como recibiendo el rechazo real del servidor FastAPI
-    verificarPermisoOperacion(idVehiculo = CONFIG.VEHICULO_ID, silencioso = false) {
-        const unidad = this.obtenerUnidadEnriquecida(idVehiculo);
-
-        if (!this.sesion) {
-            // Si aún no ha iniciado sesión en Administración, permitimos operar Control básico si el backend lo acepta,
-            // o avisamos si intenta operar una unidad restringida.
-            return { ok: true, codigo: 200 };
-        }
-
-        const rol = this.sesion.rol;
-
-        if (rol === 'USUARIO') {
-            if (unidad.id_propietario && Number(unidad.id_propietario) !== Number(this.sesion.id_usuario)) {
-                if (!silencioso) {
-                    ui.showFeedback(`403 Bloqueado (BOLA): La unidad #${idVehiculo} no pertenece a tu cuenta`, 'danger', 4000);
-                }
-                return { ok: false, codigo: 403, motivo: 'Esta unidad pertenece a otro comprador (BOLA/IDOR).' };
-            }
-            return { ok: true, codigo: 200 };
-        }
-
-        if (rol === 'INVITADO') {
-            if (unidad.estado_comercial !== 'EXHIBICION') {
-                if (!silencioso) {
-                    ui.showFeedback('403 Bloqueado: Invitado sólo puede operar unidades de EXHIBICIÓN', 'danger', 4000);
-                }
-                return { ok: false, codigo: 403, motivo: 'El rol Invitado sólo puede operar unidades en EXHIBICIÓN.' };
-            }
-            const res = this.state.reservaInvitado;
-            if (!res || !res.activa || res.expira_ts <= Date.now()) {
-                if (!silencioso) {
-                    ui.showFeedback('401 Sesión temporal de Invitado expirada o sin reserva activa', 'warning', 4000);
-                }
-                return { ok: false, codigo: 401, motivo: 'Debes iniciar una reserva temporal de exhibición para operar.' };
-            }
-            return { ok: true, codigo: 200 };
-        }
-
-        if (rol === 'ADMIN') {
-            if (unidad.estado_comercial === 'VENDIDO' && unidad.id_propietario && !unidad.soporte_autorizado) {
-                if (!silencioso) {
-                    ui.showFeedback('403 Privacidad: El comprador debe activar "Autorizar Soporte" en Mis Vehículos', 'danger', 4500);
-                }
-                return { ok: false, codigo: 403, motivo: 'El Administrador requiere autorización explícita de soporte del propietario.' };
-            }
-            return { ok: true, codigo: 200 };
-        }
-
-        return { ok: false, codigo: 403, motivo: 'Rol no autorizado' };
-    }
-
-    obtenerUnidadEnriquecida(idVehiculo) {
-        const base = this.unidadesRds.find(v => Number(v.id_vehiculo) === Number(idVehiculo)) || {
-            id_vehiculo: Number(idVehiculo),
-            nombre: `Unidad ${idVehiculo}`,
-            modelo: 'Excavadora IoT',
-            descripcion: 'Unidad IoT conectada',
-            microcontrolador: 'ESP8266',
-            activo: true
-        };
-        const meta = this.state.metaUnidades[idVehiculo] || {
-            id_modelo: 1,
-            numero_serie: `SN-IOT-000${idVehiculo}`,
-            estado_comercial: idVehiculo === 1 ? 'VENDIDO' : 'DISPONIBLE',
-            id_propietario: idVehiculo === 1 ? 2 : null,
-            soporte_autorizado: false
-        };
-        const propietario = this.state.clientes.find(c => Number(c.id_usuario) === Number(meta.id_propietario));
-        const modeloObj = this.state.modelos.find(m => Number(m.id_modelo) === Number(base.id_modelo || meta.id_modelo || 1));
-
-        return {
-            ...base,
-            id_modelo: base.id_modelo ?? meta.id_modelo ?? 1,
-            codigo_modelo: modeloObj?.codigo_modelo || 'EXC-IOT-V1',
-            numero_serie: base.numero_serie || meta.numero_serie || `SN-IOT-000${idVehiculo}`,
-            estado_comercial: base.estado_comercial || meta.estado_comercial || 'DISPONIBLE',
-            id_propietario: base.id_propietario !== undefined ? base.id_propietario : meta.id_propietario,
-            nombre_propietario: base.nombre_propietario || propietario?.nombre || null,
-            email_propietario: base.email_propietario || propietario?.email || null,
-            soporte_autorizado: Boolean(
-                base.soporte_autorizado !== undefined ? base.soporte_autorizado : meta.soporte_autorizado
-            )
-        };
-    }
-
-    obtenerTodasLasUnidadesEnriquecidas() {
-        const idsRds = this.unidadesRds.map(v => Number(v.id_vehiculo));
-        const idsMeta = Object.keys(this.state.metaUnidades).map(Number);
-        const todosIds = Array.from(new Set([...idsRds, ...idsMeta])).sort((a, b) => a - b);
-        return todosIds.map(id => this.obtenerUnidadEnriquecida(id));
-    }
-
-    obtenerUnidadesVisiblesPorRol() {
-        const todas = this.obtenerTodasLasUnidadesEnriquecidas();
-        if (!this.sesion) {
-            return todas.filter(u => u.id_vehiculo === 1 || u.estado_comercial === 'EXHIBICION');
-        }
-        if (this.sesion.rol === 'ADMIN') {
-            return todas;
-        }
-        if (this.sesion.rol === 'USUARIO') {
-            return todas.filter(u => Number(u.id_propietario) === Number(this.sesion.id_usuario));
-        }
-        return todas.filter(u => u.estado_comercial === 'EXHIBICION');
-    }
-
-    async sincronizarDesdeRds() {
-        try {
-            if (this.sesion && this.sesion.rol === 'ADMIN' && CONFIG.AUTH_TOKEN) {
-                try {
-                    const dash = await api.obtenerDashboardAdmin();
-                    if (dash) {
-                        if (Array.isArray(dash.unidades)) {
-                            this.unidadesRds = dash.unidades;
-                            dash.unidades.forEach(u => {
-                                this.state.metaUnidades[u.id_vehiculo] = {
-                                    id_modelo: u.id_modelo || 1,
-                                    numero_serie: u.numero_serie,
-                                    estado_comercial: u.estado_comercial,
-                                    id_propietario: u.id_propietario,
-                                    soporte_autorizado: Boolean(u.soporte_autorizado),
-                                    soporte_expira_en: u.soporte_expira_en
-                                };
-                            });
-                        }
-                        if (Array.isArray(dash.modelos) && dash.modelos.length) this.state.modelos = dash.modelos;
-                        if (Array.isArray(dash.clientes)) this.state.clientes = dash.clientes;
-                        if (Array.isArray(dash.auditoria)) this.state.auditoria = dash.auditoria;
-                        this.renderizarTodo();
-                        return;
-                    }
-                } catch (e) {
-                    console.warn('Endpoint /api/admin/dashboard pendiente de actualizar en EC2:', e.message);
-                }
-            }
-
-            if (this.sesion && this.sesion.rol === 'USUARIO' && CONFIG.AUTH_TOKEN) {
-                try {
-                    const mis = await api.obtenerMisVehiculos();
-                    if (Array.isArray(mis)) {
-                        this.unidadesRds = mis;
-                        mis.forEach(u => {
-                            this.state.metaUnidades[u.id_vehiculo] = {
-                                id_modelo: u.id_modelo || 1,
-                                numero_serie: u.numero_serie,
-                                estado_comercial: u.estado_comercial || 'VENDIDO',
-                                id_propietario: this.sesion.id_usuario,
-                                soporte_autorizado: Boolean(u.soporte_autorizado),
-                                soporte_expira_en: u.soporte_expira_en
-                            };
-                        });
-                        this.renderizarTodo();
-                        return;
-                    }
-                } catch (_) {}
-            }
-
-            try {
-                const cat = await api.obtenerCatalogoPublico();
-                if (cat && Array.isArray(cat.modelos) && cat.modelos.length) {
-                    this.state.modelos = cat.modelos;
-                }
-            } catch (_) {}
-
-            const listaRds = await api.obtenerVehiculos();
-            if (Array.isArray(listaRds) && listaRds.length > 0) {
-                this.unidadesRds = listaRds;
-            }
-        } catch (err) {
-            console.warn('Error sincronizando con RDS:', err.message);
-        }
-
-        this.renderizarTodo();
-    }
-
-    // Autenticación real contra POST /api/auth/login (sin contraseñas hardcodeadas en el código)
-    async iniciarSesionConCredenciales(email, password) {
-        const res = await api.login(email, password);
-        CONFIG.setAuthToken(res.access_token);
-        sessionStorage.setItem(SESSION_TOKEN_KEY, res.access_token);
-
-        this.sesion = res.usuario;
-        if (Array.isArray(res.unidades) && res.unidades.length > 0) {
-            this.unidadesRds = res.unidades;
-            res.unidades.forEach(u => {
-                this.state.metaUnidades[u.id_vehiculo] = {
-                    id_modelo: u.id_modelo || 1,
-                    numero_serie: u.numero_serie,
-                    estado_comercial: u.estado_comercial,
-                    id_propietario: u.id_propietario ?? (this.sesion.rol === 'USUARIO' ? this.sesion.id_usuario : null),
-                    soporte_autorizado: Boolean(u.soporte_autorizado)
-                };
-            });
-            await this.seleccionarUnidadActiva(res.unidades[0].id_vehiculo, false);
-        }
-
-        await this.sincronizarDesdeRds();
-        this.actualizarBadgeSesionCabecera();
-        ui.playSound('start');
-        ui.showFeedback(`Bienvenido, ${this.sesion.nombre} (${this.sesion.rol})`, 'success', 2800);
-    }
-
-    // Sesión temporal real de Invitado contra POST /api/auth/invitado
-    async iniciarSesionInvitadoReal(nombreVisitante = 'Visitante Showroom') {
-        const res = await api.iniciarSesionInvitado(nombreVisitante);
-        CONFIG.setAuthToken(res.access_token);
-        sessionStorage.setItem(SESSION_TOKEN_KEY, res.access_token);
-
-        this.sesion = res.usuario;
-        const idExh = res.reserva?.id_vehiculo || 2;
-        const segRestantes = Number(res.reserva?.segundos_restantes || res.expires_in || 180);
-
-        this.state.reservaInvitado = {
-            id_vehiculo: idExh,
-            nombre_vehiculo: res.reserva?.nombre_vehiculo || 'Unidad 2 - Showroom',
-            operador: nombreVisitante,
-            expira_ts: Date.now() + segRestantes * 1000,
-            activa: true
-        };
-
-        if (Array.isArray(res.unidades) && res.unidades.length > 0) {
-            this.unidadesRds = res.unidades;
-        }
-
-        this._iniciarRelojInvitado();
-        await this.seleccionarUnidadActiva(idExh, false);
-        this.actualizarBadgeSesionCabecera();
-        this.renderizarTodo();
-        ui.playSound('start');
-        ui.showFeedback(`Reserva exclusiva de exhibición iniciada (3 min)`, 'success', 3000);
-    }
-
-    async cerrarSesionActual() {
+    _limpiarSesionLocal() {
         clearInterval(this.guestInterval);
-        try {
-            if (CONFIG.AUTH_TOKEN) {
-                await api.logout();
-            }
-        } catch (_) {}
-
         sessionStorage.removeItem(SESSION_TOKEN_KEY);
         CONFIG.setAuthToken(null);
         this.sesion = null;
         this.state.reservaInvitado = null;
-        this.actualizarBadgeSesionCabecera();
+        this.state.clientes = [];
+        this.state.auditoria = [];
+        this.state.sesionesActivas = [];
+    }
+
+    async iniciarSesionConCredenciales(email, password) {
+        const res = await api.login(email, password);
+        CONFIG.setAuthToken(res.access_token);
+        sessionStorage.setItem(SESSION_TOKEN_KEY, res.access_token);
+        this.sesion = res.usuario;
+        await this.sincronizarDesdeRds({ elegirUnidad: true, forzarSeleccion: true });
+        ui.playSound('start');
+        ui.showFeedback(`Bienvenido, ${this.sesion.nombre} (${this.sesion.rol})`, 'success', 2800);
+    }
+
+    async iniciarSesionInvitadoReal(nombreVisitante = 'Visitante Showroom') {
+        const res = await api.iniciarSesionInvitado(nombreVisitante);
+        CONFIG.setAuthToken(res.access_token);
+        sessionStorage.setItem(SESSION_TOKEN_KEY, res.access_token);
+        this.sesion = res.usuario;
+        const idExh = res.reserva?.id_vehiculo;
+        const segRestantes = Number(res.reserva?.segundos_restantes || res.expires_in || 180);
+        this.state.reservaInvitado = {
+            id_vehiculo: idExh,
+            nombre_vehiculo: res.reserva?.nombre_vehiculo || `Unidad #${idExh}`,
+            operador: nombreVisitante,
+            expira_ts: Date.now() + segRestantes * 1000,
+            activa: true
+        };
+        this._iniciarRelojInvitado();
+        await this.sincronizarDesdeRds({ elegirUnidad: false });
+        if (idExh) await this.seleccionarUnidadActiva(idExh, false);
         this.renderizarTodo();
+        ui.playSound('start');
+        ui.showFeedback('Prueba de exhibición iniciada: tienes 3 minutos', 'success', 3000);
+    }
+
+    async cerrarSesionActual() {
+        try {
+            if (CONFIG.AUTH_TOKEN) await api.logout();
+        } catch (_) {}
+        this._limpiarSesionLocal();
+        await this.sincronizarDesdeRds({ elegirUnidad: true, forzarSeleccion: true });
         ui.playSound('cancel');
-        ui.showFeedback('Sesión cerrada correctamente', 'info', 2200);
+        ui.showFeedback('Sesión cerrada', 'info', 2200);
     }
 
     _iniciarRelojInvitado() {
@@ -514,27 +142,17 @@ class AdminManager {
             const res = this.state.reservaInvitado;
             const badge = document.getElementById('guest-countdown-timer');
             const headerRole = document.getElementById('header-role-text');
-
             if (!res || !res.activa) {
-                if (badge) badge.textContent = '00:00 (Finalizada)';
+                if (badge) badge.textContent = '00:00';
                 clearInterval(this.guestInterval);
                 return;
             }
-
             const restSeg = Math.max(0, Math.ceil((res.expira_ts - Date.now()) / 1000));
-            const min = String(Math.floor(restSeg / 60)).padStart(2, '0');
-            const seg = String(restSeg % 60).padStart(2, '0');
-
-            if (badge) badge.textContent = `${min}:${seg}`;
-            if (headerRole && this.sesion?.rol === 'INVITADO') {
-                headerRole.textContent = `INVITADO (${min}:${seg})`;
-            }
-
-            if (restSeg <= 0) {
-                this.finalizarReservaInvitado(true);
-            }
+            const mmss = `${String(Math.floor(restSeg / 60)).padStart(2, '0')}:${String(restSeg % 60).padStart(2, '0')}`;
+            if (badge) badge.textContent = mmss;
+            if (headerRole && this.sesion?.rol === 'INVITADO') headerRole.textContent = `INVITADO (${mmss})`;
+            if (restSeg <= 0) this.finalizarReservaInvitado(true);
         };
-
         actualizarReloj();
         this.guestInterval = setInterval(actualizarReloj, 1000);
     }
@@ -544,51 +162,147 @@ class AdminManager {
         const res = this.state.reservaInvitado;
         if (res && res.activa) {
             res.activa = false;
+            // El servidor también detiene la unidad al vencer la sesión (vigilante en FastAPI)
             if (this.onStopVehicle) {
                 try { await this.onStopVehicle(); } catch (_) {}
             }
             try { await api.logout(); } catch (_) {}
-            sessionStorage.removeItem(SESSION_TOKEN_KEY);
-            CONFIG.setAuthToken(null);
-            this.sesion = null;
-
+            this._limpiarSesionLocal();
             ui.showFeedback(
-                porExpiracion
-                    ? 'Sesión de Invitado expirada: vehículo detenido de forma segura'
-                    : 'Reserva de exhibición liberada y vehículo detenido',
-                'warning',
-                3800
+                porExpiracion ? 'Tu prueba de Invitado terminó: el vehículo se detuvo' : 'Prueba finalizada y vehículo detenido',
+                'warning', 3800
             );
+            await this.sincronizarDesdeRds({ elegirUnidad: true, forzarSeleccion: true });
         }
-        this.actualizarBadgeSesionCabecera();
+    }
+
+    // ------------------------------------------------------------------ datos reales de RDS
+
+    /**
+     * Carga desde la API los datos que la sesión actual puede ver.
+     * Ante un error NO se inventan datos: se guarda el error y las tablas muestran "Sin datos".
+     */
+    async sincronizarDesdeRds({ elegirUnidad = false, forzarSeleccion = false } = {}) {
+        this.errorCarga = null;
+        const rol = this.sesion?.rol;
+        try {
+            if (rol === 'ADMIN') {
+                const dash = await api.obtenerDashboardAdmin();
+                this.unidadesRds = Array.isArray(dash?.unidades) ? dash.unidades : [];
+                this.state.modelos = Array.isArray(dash?.modelos) ? dash.modelos : [];
+                this.state.clientes = Array.isArray(dash?.clientes) ? dash.clientes : [];
+                this.state.auditoria = Array.isArray(dash?.auditoria) ? dash.auditoria : [];
+                this.state.sesionesActivas = Array.isArray(dash?.sesiones_activas) ? dash.sesiones_activas : [];
+            } else if (rol === 'USUARIO') {
+                const [mis, cat] = await Promise.all([api.obtenerMisVehiculos(), api.obtenerCatalogoPublico().catch(() => null)]);
+                this.unidadesRds = (Array.isArray(mis) ? mis : []).map((u) => ({ ...u, id_propietario: this.sesion.id_usuario }));
+                this.state.modelos = Array.isArray(cat?.modelos) ? cat.modelos : [];
+            } else {
+                // Sin sesión o Invitado: catálogo público y unidades de exhibición
+                const cat = await api.obtenerCatalogoPublico();
+                this.state.modelos = Array.isArray(cat?.modelos) ? cat.modelos : [];
+                this.unidadesRds = (Array.isArray(cat?.unidades_exhibicion) ? cat.unidades_exhibicion : [])
+                    .map((u) => ({ ...u, estado_comercial: 'EXHIBICION', activo: 1 }));
+            }
+        } catch (err) {
+            if (err.status === 401 && this.sesion) {
+                // Token vencido, revocado o cuenta desactivada
+                this._limpiarSesionLocal();
+                ui.showFeedback('Tu sesión terminó. Inicia sesión de nuevo.', 'warning', 3500);
+                return this.sincronizarDesdeRds({ elegirUnidad: true, forzarSeleccion: true });
+            }
+            this.errorCarga = err.status ? `HTTP ${err.status}: ${err.message}` : 'Sin conexión con AWS';
+            this.unidadesRds = [];
+        }
+
+        if (elegirUnidad) await this._asegurarUnidadVisible(forzarSeleccion);
         this.renderizarTodo();
     }
 
-    async seleccionarUnidadActiva(idVehiculo, mostrarAviso = true) {
-        const numId = Number(idVehiculo) || 1;
-        const unidad = this.obtenerUnidadEnriquecida(numId);
+    async _asegurarUnidadVisible(forzar = false) {
+        const visibles = this.obtenerUnidadesVisiblesPorRol();
+        const actual = Number(CONFIG.VEHICULO_ACTIVO_LOGICO || CONFIG.VEHICULO_ID);
+        const sigueVisible = visibles.some((u) => Number(u.id_vehiculo) === actual);
+        if (visibles.length && (forzar || !sigueVisible)) {
+            await this.seleccionarUnidadActiva(visibles[0].id_vehiculo, false);
+        } else if (!visibles.length) {
+            this.actualizarBadgeSesionCabecera();
+        }
+    }
 
-        const existeEnRds = this.unidadesRds.some(v => Number(v.id_vehiculo) === numId);
+    obtenerUnidadEnriquecida(idVehiculo) {
+        const base = this.unidadesRds.find((v) => Number(v.id_vehiculo) === Number(idVehiculo));
+        if (!base) {
+            return { id_vehiculo: Number(idVehiculo), nombre: `Unidad #${idVehiculo}`, numero_serie: '—', estado_comercial: 'SIN DATOS', id_propietario: null };
+        }
+        const modeloObj = this.state.modelos.find((m) => Number(m.id_modelo) === Number(base.id_modelo));
+        return {
+            ...base,
+            codigo_modelo: modeloObj?.codigo_modelo || '—',
+            numero_serie: base.numero_serie || '—',
+            estado_comercial: base.estado_comercial || 'SIN DATOS',
+            soporte_autorizado: Boolean(Number(base.soporte_autorizado || 0))
+        };
+    }
+
+    obtenerTodasLasUnidadesEnriquecidas() {
+        return this.unidadesRds.map((u) => this.obtenerUnidadEnriquecida(u.id_vehiculo));
+    }
+
+    // El servidor ya filtra por rol; aquí sólo se descartan unidades dadas de baja
+    obtenerUnidadesVisiblesPorRol() {
+        return this.obtenerTodasLasUnidadesEnriquecidas().filter((u) => Number(u.activo ?? 1) === 1);
+    }
+
+    /**
+     * Aviso inmediato antes de enviar un comando. NO es la seguridad: el servidor vuelve a validar
+     * cada petición (401/403) aunque alguien se salte esta comprobación.
+     */
+    verificarPermisoOperacion(idVehiculo = CONFIG.VEHICULO_ID, silencioso = false) {
+        const avisar = (msg, tipo = 'danger') => { if (!silencioso) ui.showFeedback(msg, tipo, 4000); };
+        if (!this.sesion) {
+            avisar('Inicia sesión o pide una prueba como Invitado (pestaña Administración) para controlar el vehículo', 'warning');
+            return { ok: false, codigo: 401, motivo: 'Sin sesión' };
+        }
+        const unidad = this.obtenerUnidadEnriquecida(idVehiculo);
+        const rol = this.sesion.rol;
+        if (rol === 'USUARIO' && !this.unidadesRds.some((u) => Number(u.id_vehiculo) === Number(idVehiculo))) {
+            avisar(`403: la unidad #${idVehiculo} no pertenece a tu cuenta`);
+            return { ok: false, codigo: 403, motivo: 'Unidad de otro comprador' };
+        }
+        if (rol === 'INVITADO') {
+            const res = this.state.reservaInvitado;
+            if (!res || !res.activa || res.expira_ts <= Date.now()) {
+                avisar('401: tu prueba de Invitado terminó', 'warning');
+                return { ok: false, codigo: 401, motivo: 'Sesión de Invitado vencida' };
+            }
+            if (Number(res.id_vehiculo) !== Number(idVehiculo)) {
+                avisar(`403: tu prueba sólo incluye la unidad #${res.id_vehiculo}`);
+                return { ok: false, codigo: 403, motivo: 'Unidad no reservada' };
+            }
+        }
+        if (rol === 'ADMIN' && unidad.estado_comercial === 'VENDIDO' && unidad.id_propietario && !unidad.soporte_autorizado) {
+            avisar('403 Privacidad: el comprador debe activar "Autorizar soporte" en Mis vehículos');
+            return { ok: false, codigo: 403, motivo: 'Sin autorización de soporte' };
+        }
+        return { ok: true, codigo: 200 };
+    }
+
+    async seleccionarUnidadActiva(idVehiculo, mostrarAviso = true) {
+        const numId = Number(idVehiculo);
+        if (!numId) return;
+        const unidad = this.obtenerUnidadEnriquecida(numId);
         CONFIG.VEHICULO_ACTIVO_LOGICO = numId;
-        CONFIG.setVehiculoId(existeEnRds ? numId : 1);
+        CONFIG.setVehiculoId(numId);
 
         const sub = document.getElementById('header-unit-subtitle');
-        if (sub) {
-            sub.textContent = `${unidad.nombre} · ${unidad.numero_serie} (${unidad.estado_comercial})`;
-        }
+        if (sub) sub.textContent = `${unidad.nombre} · ${unidad.numero_serie} (${unidad.estado_comercial})`;
+        this.actualizarBadgeSesionCabecera();
 
-        const selHeader = document.getElementById('header-unit-select');
-        if (selHeader && String(selHeader.value) !== String(numId)) {
-            selHeader.value = String(numId);
-        }
-
-        if (this.onUnitChanged) {
-            await this.onUnitChanged(CONFIG.VEHICULO_ID, unidad);
-        }
-
+        if (this.onUnitChanged) await this.onUnitChanged(numId, unidad);
         if (mostrarAviso) {
             ui.playSound('tap');
-            ui.showFeedback(`Unidad activa: ${unidad.nombre} (${unidad.numero_serie})`, 'info', 2200);
+            ui.showFeedback(`Unidad activa: ${unidad.nombre}`, 'info', 2200);
         }
     }
 
@@ -596,80 +310,64 @@ class AdminManager {
         const roleBadge = document.getElementById('header-role-text');
         const roleBtn = document.getElementById('btn-role-switcher');
         if (roleBadge) {
-            roleBadge.textContent = this.sesion
-                ? `${this.sesion.rol}: ${this.sesion.nombre.split(' ')[0]}`
-                : 'Iniciar Sesión';
+            roleBadge.textContent = this.sesion ? `${this.sesion.rol}: ${String(this.sesion.nombre || '').split(' ')[0]}` : 'Iniciar sesión';
         }
-        if (roleBtn) {
-            roleBtn.dataset.role = this.sesion ? this.sesion.rol : 'NONE';
-        }
+        if (roleBtn) roleBtn.dataset.role = this.sesion ? this.sesion.rol : 'NONE';
 
         const selHeader = document.getElementById('header-unit-select');
         if (selHeader) {
             const visibles = this.obtenerUnidadesVisiblesPorRol();
             const actual = CONFIG.VEHICULO_ACTIVO_LOGICO || CONFIG.VEHICULO_ID;
-            selHeader.innerHTML = visibles.map(u => `
-                <option value="${u.id_vehiculo}" ${Number(u.id_vehiculo) === Number(actual) ? 'selected' : ''}>
-                    #${u.id_vehiculo} ${u.nombre} (${u.estado_comercial})
-                </option>
-            `).join('');
+            selHeader.innerHTML = visibles.length
+                ? visibles.map((u) => `
+                    <option value="${u.id_vehiculo}" ${Number(u.id_vehiculo) === Number(actual) ? 'selected' : ''}>
+                        #${u.id_vehiculo} ${esc(u.nombre)} (${esc(u.estado_comercial)})
+                    </option>`).join('')
+                : '<option value="">Sin unidades disponibles</option>';
+            selHeader.disabled = visibles.length <= 1;
         }
     }
 
+    // ------------------------------------------------------------------ render
+
     renderizarTodo() {
-        if (!this.sesion) {
-            this.sesion = { ...PERFILES_DEMO.ADMIN };
-        }
-
         this.actualizarBadgeSesionCabecera();
+        const rol = this.sesion?.rol || null;
 
-        const secAdmin = document.getElementById('admin-role-section-admin');
-        const secUser = document.getElementById('admin-role-section-usuario');
-        const secGuest = document.getElementById('admin-role-section-invitado');
-        const secEditor = document.getElementById('panel-editor-demos');
+        const mostrar = (id, visible) => document.getElementById(id)?.classList.toggle('d-none', !visible);
+        mostrar('admin-role-section-admin', rol === 'ADMIN');
+        mostrar('admin-role-section-usuario', rol === 'USUARIO');
+        mostrar('admin-role-section-invitado', !rol || rol === 'INVITADO');
+        mostrar('panel-editor-demos', rol === 'ADMIN' || rol === 'USUARIO');
+        mostrar('admin-login-box', !rol);
+        mostrar('admin-security-tests', Boolean(rol));
 
-        const rol = this.sesion.rol;
-        const claveActiva = this.sesion.clave_perfil || (
-            rol === 'ADMIN' ? 'ADMIN' :
-            rol === 'INVITADO' ? 'INVITADO' :
-            Number(this.sesion.id_usuario) === 3 ? 'USUARIO_B' : 'USUARIO_A'
-        );
-
-        document.querySelectorAll('[data-switch-profile]').forEach(btn => {
-            btn.classList.toggle('active', btn.getAttribute('data-switch-profile') === claveActiva);
-        });
-
-        if (secAdmin) secAdmin.classList.toggle('d-none', rol !== 'ADMIN');
-        if (secUser) secUser.classList.toggle('d-none', rol !== 'USUARIO');
-        if (secGuest) secGuest.classList.toggle('d-none', rol !== 'INVITADO');
-        if (secEditor) secEditor.classList.toggle('d-none', rol === 'INVITADO');
-
-        const bannerRol = document.getElementById('admin-current-session-banner');
-        if (bannerRol) {
-            const unidades = this.obtenerUnidadesVisiblesPorRol();
-            const jwtBadge = CONFIG.AUTH_TOKEN
-                ? `<span class="badge bg-success ms-1"><i class="bi bi-key-fill"></i> JWT RDS</span>`
-                : `<span class="badge bg-info text-dark ms-1"><i class="bi bi-shield-check"></i> RBAC Activo</span>`;
-            bannerRol.innerHTML = `
-                <div class="d-flex flex-wrap align-items-center justify-content-between gap-2">
-                    <div class="d-flex flex-wrap align-items-center gap-1">
-                        <span class="badge role-pill role-${rol.toLowerCase()}">${rol}</span>
-                        <strong>${this.sesion.nombre}</strong>
-                        <span class="text-secondary small">(${this.sesion.email})</span>
-                        ${jwtBadge}
-                    </div>
+        const banner = document.getElementById('admin-current-session-banner');
+        if (banner) {
+            if (!rol) {
+                banner.innerHTML = `
                     <div class="d-flex flex-wrap align-items-center gap-2">
-                        <span class="small text-info">
-                            <i class="bi bi-shield-lock-fill"></i> Unidades autorizadas: <strong>${unidades.length}</strong>
-                        </span>
-                        ${CONFIG.AUTH_TOKEN ? `
+                        <span class="badge bg-secondary">SIN SESIÓN</span>
+                        <span class="small">Inicia sesión como <b>Administrador</b> o <b>Usuario</b>, o pide una <b>prueba de 3 min como Invitado</b>. Sin sesión sólo puedes ver el catálogo público.</span>
+                    </div>`;
+            } else {
+                banner.innerHTML = `
+                    <div class="d-flex flex-wrap align-items-center justify-content-between gap-2">
+                        <div class="d-flex flex-wrap align-items-center gap-1">
+                            <span class="badge role-pill role-${esc(rol.toLowerCase())}">${esc(rol)}</span>
+                            <strong>${esc(this.sesion.nombre)}</strong>
+                            ${this.sesion.email ? `<span class="text-secondary small">(${esc(this.sesion.email)})</span>` : ''}
+                            <span class="badge bg-success ms-1"><i class="bi bi-key-fill"></i> Sesión JWT</span>
+                        </div>
+                        <div class="d-flex flex-wrap align-items-center gap-2">
+                            <span class="small text-info"><i class="bi bi-shield-lock-fill"></i> Unidades autorizadas: <strong>${this.obtenerUnidadesVisiblesPorRol().length}</strong></span>
                             <button type="button" id="btn-logout-session" class="btn btn-sm btn-outline-danger py-0 px-2">
-                                <i class="bi bi-box-arrow-right"></i> Cerrar JWT
+                                <i class="bi bi-box-arrow-right"></i> Cerrar sesión
                             </button>
-                        ` : ''}
+                        </div>
                     </div>
-                </div>
-            `;
+                    ${this.errorCarga ? `<div class="small text-warning mt-1"><i class="bi bi-exclamation-triangle"></i> No se pudieron leer los datos: ${esc(this.errorCarga)}</div>` : ''}`;
+            }
         }
 
         if (rol === 'ADMIN') {
@@ -677,16 +375,13 @@ class AdminManager {
             this.renderTablaModelos();
             this.renderTablaUnidades();
             this.renderTablaClientes();
-            this.renderComandosUnidadAdmin(this.idUnidadComandosSel);
+            this.renderComandosUnidadAdmin(this.idUnidadComandosSel || this.unidadesRds[0]?.id_vehiculo);
             this.renderAuditoria();
-            this.cargarDemosParaEditor(this.idUnidadComandosSel);
+            this.cargarDemosParaEditor(CONFIG.VEHICULO_ID);
         } else if (rol === 'USUARIO') {
             this.renderMisVehiculosUsuario();
-            const misUnidades = this.obtenerUnidadesVisiblesPorRol();
-            if (misUnidades.length > 0) {
-                this.cargarDemosParaEditor(misUnidades[0].id_vehiculo);
-            }
-        } else if (rol === 'INVITADO') {
+            if (this.unidadesRds.length) this.cargarDemosParaEditor(CONFIG.VEHICULO_ID);
+        } else {
             this.renderPanelInvitado();
         }
     }
@@ -694,87 +389,62 @@ class AdminManager {
     renderMetricas() {
         const cont = document.getElementById('admin-metrics-grid');
         if (!cont) return;
+        if (this.errorCarga) {
+            cont.innerHTML = `<div class="admin-metric-card"><span class="metric-label"><i class="bi bi-database-x"></i> Métricas</span><strong class="metric-value text-secondary">Sin datos</strong><small class="metric-sub">${esc(this.errorCarga)}</small></div>`;
+            return;
+        }
         const todas = this.obtenerTodasLasUnidadesEnriquecidas();
-        const vendidas = todas.filter(u => u.estado_comercial === 'VENDIDO').length;
-        const exhibicion = todas.filter(u => u.estado_comercial === 'EXHIBICION').length;
-        const disponibles = todas.filter(u => u.estado_comercial === 'DISPONIBLE').length;
-
+        const cuenta = (estado) => todas.filter((u) => u.estado_comercial === estado).length;
         cont.innerHTML = `
             <div class="admin-metric-card">
                 <span class="metric-label"><i class="bi bi-boxes"></i> Modelos Comerciales</span>
-                <strong class="metric-value text-info">${this.state.modelos.length}</strong>
-                <small class="metric-sub">En catálogo RDS</small>
+                <strong class="metric-value text-info">${this.state.modelos.filter((m) => Number(m.activo ?? 1) === 1).length}</strong>
+                <small class="metric-sub">${this.state.modelos.length} en catálogo RDS</small>
             </div>
             <div class="admin-metric-card">
                 <span class="metric-label"><i class="bi bi-truck-flatbed"></i> Unidades Físicas</span>
-                <strong class="metric-value">${todas.length}</strong>
-                <small class="metric-sub">${disponibles} disponibles · ${exhibicion} exhibición</small>
+                <strong class="metric-value">${todas.filter((u) => Number(u.activo ?? 1) === 1).length}</strong>
+                <small class="metric-sub">${cuenta('DISPONIBLE')} disponibles · ${cuenta('EXHIBICION')} exhibición · ${cuenta('INACTIVO')} de baja</small>
             </div>
             <div class="admin-metric-card">
                 <span class="metric-label"><i class="bi bi-bag-check-fill"></i> Unidades Vendidas</span>
-                <strong class="metric-value text-success">${vendidas}</strong>
+                <strong class="metric-value text-success">${cuenta('VENDIDO')}</strong>
                 <small class="metric-sub">Con propietario asignado</small>
             </div>
             <div class="admin-metric-card">
                 <span class="metric-label"><i class="bi bi-people-fill"></i> Clientes Compradores</span>
-                <strong class="metric-value text-warning">${this.state.clientes.length}</strong>
-                <small class="metric-sub">${this.state.auditoria.length} eventos en bitácora RDS</small>
-            </div>
-        `;
-    }
-
-    _guardarEstado() {
-        // Estado persistido en memoria de la sesión actual
-    }
-
-    registrarAuditoria({ accion, id_vehiculo, resultado, motivo, detalle }) {
-        if (!Array.isArray(this.state.auditoria)) this.state.auditoria = [];
-        this.state.auditoria.unshift({
-            accion: accion || 'EVENTO_SEGURIDAD',
-            actor: this.sesion?.nombre || 'Operador',
-            rol: this.sesion?.rol || 'INVITADO',
-            detalle: detalle || `${resultado ? `[${resultado}] ` : ''}${motivo || ''}${id_vehiculo ? ` (Unidad #${id_vehiculo})` : ''}`,
-            fecha_hora: new Date().toISOString()
-        });
-    }
-
-    renderBitacoraAuditoria() {
-        this.renderAuditoria();
-    }
-
-    activarReservaInvitadoLocal(nombreVisitante = 'Visitante Showroom') {
-        this.state.reservaInvitado = {
-            id_vehiculo: 2,
-            nombre_vehiculo: 'Unidad 2 - Showroom',
-            operador: nombreVisitante,
-            expira_ts: Date.now() + 180 * 1000,
-            activa: true
-        };
-        this._iniciarRelojInvitado();
-        ui.playSound('start');
-        ui.showFeedback('Reserva exclusiva de exhibición iniciada (3 min)', 'success', 2800);
+                <strong class="metric-value text-warning">${this.state.clientes.filter((c) => Number(c.activo ?? 1) === 1).length}</strong>
+                <small class="metric-sub">${this.state.sesionesActivas.length} prueba(s) de Invitado activa(s)</small>
+            </div>`;
     }
 
     renderTablaModelos() {
         const tbody = document.getElementById('tabla-admin-modelos');
         const selectMod = document.getElementById('unit-form-modelo');
         if (tbody) {
-            tbody.innerHTML = this.state.modelos.map(m => `
-                <tr>
-                    <td data-label="Código"><span class="badge bg-dark border border-info text-info">${m.codigo_modelo}</span></td>
-                    <td data-label="Modelo" class="fw-semibold">${m.nombre}</td>
-                    <td data-label="MCU">${m.microcontrolador_default || 'ESP8266'}</td>
+            tbody.innerHTML = this.state.modelos.length ? this.state.modelos.map((m) => {
+                const activo = Number(m.activo ?? 1) === 1;
+                return `
+                <tr class="${activo ? '' : 'opacity-50'}">
+                    <td data-label="Código"><span class="badge bg-dark border border-info text-info">${esc(m.codigo_modelo)}</span></td>
+                    <td data-label="Modelo" class="fw-semibold">${esc(m.nombre)}</td>
+                    <td data-label="MCU">${esc(m.microcontrolador_default || '—')}</td>
                     <td data-label="Capacidades">
                         <span class="badge ${m.tiene_brazo ? 'bg-success' : 'bg-secondary'} me-1">Brazo: ${m.tiene_brazo ? 'Sí' : 'No'}</span>
                         <span class="badge ${m.tiene_motores_giro ? 'bg-info text-dark' : 'bg-secondary'}">Giro: ${m.tiene_motores_giro ? 'Sí' : 'No'}</span>
                     </td>
-                </tr>
-            `).join('');
+                    <td data-label="Estado">
+                        <button type="button" class="btn btn-sm ${activo ? 'btn-outline-secondary' : 'btn-outline-success'} py-0 px-2" data-action="toggle-modelo" data-id="${m.id_modelo}">
+                            ${activo ? '<i class="bi bi-pause-circle"></i> Desactivar' : '<i class="bi bi-play-circle"></i> Activar'}
+                        </button>
+                    </td>
+                </tr>`;
+            }).join('') : SIN_DATOS(5, this.errorCarga || 'Sin modelos en RDS');
         }
         if (selectMod) {
-            selectMod.innerHTML = this.state.modelos.map(m => `
-                <option value="${m.id_modelo}">${m.codigo_modelo} — ${m.nombre}</option>
-            `).join('');
+            selectMod.innerHTML = this.state.modelos
+                .filter((m) => Number(m.activo ?? 1) === 1)
+                .map((m) => `<option value="${m.id_modelo}">${esc(m.codigo_modelo)} — ${esc(m.nombre)}</option>`).join('');
         }
     }
 
@@ -785,62 +455,50 @@ class AdminManager {
         const unidades = this.obtenerTodasLasUnidadesEnriquecidas();
 
         if (tbody) {
-            tbody.innerHTML = unidades.map(u => {
-                const badgeClass =
-                    u.estado_comercial === 'VENDIDO' ? 'bg-success' :
-                    u.estado_comercial === 'EXHIBICION' ? 'bg-info text-dark' :
-                    u.estado_comercial === 'MANTENIMIENTO' ? 'bg-danger' : 'bg-warning text-dark';
-
+            tbody.innerHTML = unidades.length ? unidades.map((u) => {
+                const badgeClass = { VENDIDO: 'bg-success', EXHIBICION: 'bg-info text-dark', MANTENIMIENTO: 'bg-danger', INACTIVO: 'bg-secondary' }[u.estado_comercial] || 'bg-warning text-dark';
+                const activa = Number(u.activo ?? 1) === 1;
                 const soporteHtml = u.estado_comercial === 'VENDIDO'
                     ? (u.soporte_autorizado
-                        ? '<span class="badge bg-success"><i class="bi bi-unlock-fill"></i> Soporte Autorizado</span>'
-                        : '<span class="badge bg-secondary"><i class="bi bi-lock-fill"></i> Privado (Bloqueado)</span>')
-                    : '<span class="text-secondary small">Control Empresa</span>';
-
+                        ? '<span class="badge bg-success"><i class="bi bi-unlock-fill"></i> Soporte autorizado</span>'
+                        : '<span class="badge bg-secondary"><i class="bi bi-lock-fill"></i> Privado (bloqueado)</span>')
+                    : '<span class="text-secondary small">Control empresa</span>';
+                let acciones = '';
+                if (activa) {
+                    acciones += `<button type="button" class="btn btn-sm btn-outline-info py-0 px-2" data-action="intentar-operar-admin" data-id="${u.id_vehiculo}"><i class="bi bi-controller"></i> Operar</button>`;
+                    if (u.id_propietario) {
+                        acciones += `<button type="button" class="btn btn-sm btn-outline-warning py-0 px-2" data-action="revocar-unidad" data-id="${u.id_vehiculo}"><i class="bi bi-person-dash"></i> Liberar</button>`;
+                    } else {
+                        acciones += `<button type="button" class="btn btn-sm btn-outline-light py-0 px-2" data-action="cambiar-exhibicion" data-id="${u.id_vehiculo}"><i class="bi bi-display"></i> ${u.estado_comercial === 'EXHIBICION' ? 'A Disponible' : 'A Exhibición'}</button>`;
+                        acciones += `<button type="button" class="btn btn-sm btn-outline-danger py-0 px-2" data-action="baja-unidad" data-id="${u.id_vehiculo}"><i class="bi bi-archive"></i> Dar de baja</button>`;
+                    }
+                } else {
+                    acciones = `<button type="button" class="btn btn-sm btn-outline-success py-0 px-2" data-action="reactivar-unidad" data-id="${u.id_vehiculo}"><i class="bi bi-arrow-counterclockwise"></i> Reactivar</button>`;
+                }
                 return `
-                    <tr>
+                    <tr class="${activa ? '' : 'opacity-50'}">
                         <td data-label="ID"><strong>#${u.id_vehiculo}</strong></td>
-                        <td data-label="Núm. Serie"><code>${u.numero_serie}</code></td>
+                        <td data-label="Núm. Serie"><code>${esc(u.numero_serie)}</code></td>
                         <td data-label="Unidad / Modelo">
-                            <div class="fw-semibold">${u.nombre}</div>
-                            <small class="text-secondary">${u.modelo} (${u.codigo_modelo})</small>
+                            <div class="fw-semibold">${esc(u.nombre)}</div>
+                            <small class="text-secondary">${esc(u.modelo)} (${esc(u.codigo_modelo)})</small>
                         </td>
-                        <td data-label="Estado"><span class="badge ${badgeClass}">${u.estado_comercial}</span></td>
-                        <td data-label="Propietario">${u.nombre_propietario ? `<i class="bi bi-person-check-fill text-success"></i> ${u.nombre_propietario}` : '<span class="text-secondary">Sin asignar</span>'}</td>
+                        <td data-label="Estado"><span class="badge ${badgeClass}">${esc(u.estado_comercial)}</span></td>
+                        <td data-label="Propietario">${u.nombre_propietario ? `<i class="bi bi-person-check-fill text-success"></i> ${esc(u.nombre_propietario)}` : '<span class="text-secondary">Sin asignar</span>'}</td>
                         <td data-label="Privacidad / Soporte">${soporteHtml}</td>
-                        <td data-label="Acciones">
-                            <div class="d-flex flex-wrap gap-1 justify-content-end justify-content-md-center">
-                                <button type="button" class="btn btn-sm btn-outline-info py-0 px-2" data-action="intentar-operar-admin" data-id="${u.id_vehiculo}" title="Intentar operar en Control">
-                                    <i class="bi bi-controller"></i> Operar
-                                </button>
-                                ${u.id_propietario ? `
-                                    <button type="button" class="btn btn-sm btn-outline-warning py-0 px-2" data-action="revocar-unidad" data-id="${u.id_vehiculo}" title="Revocar asignación">
-                                        <i class="bi bi-person-dash"></i> Liberar
-                                    </button>
-                                ` : `
-                                    <button type="button" class="btn btn-sm btn-outline-light py-0 px-2" data-action="cambiar-exhibicion" data-id="${u.id_vehiculo}" title="Alternar Exhibición/Disponible">
-                                        <i class="bi bi-display"></i> ${u.estado_comercial === 'EXHIBICION' ? 'A Disponible' : 'A Exhibición'}
-                                    </button>
-                                `}
-                            </div>
-                        </td>
-                    </tr>
-                `;
-            }).join('');
+                        <td data-label="Acciones"><div class="d-flex flex-wrap gap-1 justify-content-end justify-content-md-center">${acciones}</div></td>
+                    </tr>`;
+            }).join('') : SIN_DATOS(7, this.errorCarga || 'Sin unidades en RDS');
         }
 
+        const activas = unidades.filter((u) => Number(u.activo ?? 1) === 1);
         if (selectAsigUnidad) {
-            selectAsigUnidad.innerHTML = unidades.map(u => `
-                <option value="${u.id_vehiculo}">#${u.id_vehiculo} ${u.nombre} (${u.numero_serie} · ${u.estado_comercial})</option>
-            `).join('');
+            selectAsigUnidad.innerHTML = activas.map((u) => `
+                <option value="${u.id_vehiculo}">#${u.id_vehiculo} ${esc(u.nombre)} (${esc(u.numero_serie)} · ${esc(u.estado_comercial)})</option>`).join('');
         }
-
         if (selectCmdUnidad) {
-            selectCmdUnidad.innerHTML = unidades.map(u => `
-                <option value="${u.id_vehiculo}" ${Number(u.id_vehiculo) === Number(this.idUnidadComandosSel) ? 'selected' : ''}>
-                    #${u.id_vehiculo} — ${u.nombre} (${u.modelo})
-                </option>
-            `).join('');
+            selectCmdUnidad.innerHTML = activas.map((u) => `
+                <option value="${u.id_vehiculo}" ${Number(u.id_vehiculo) === Number(this.idUnidadComandosSel) ? 'selected' : ''}>#${u.id_vehiculo} — ${esc(u.nombre)}</option>`).join('');
         }
     }
 
@@ -850,394 +508,318 @@ class AdminManager {
         const unidades = this.obtenerTodasLasUnidadesEnriquecidas();
 
         if (tbody) {
-            if (this.state.clientes.length === 0) {
-                tbody.innerHTML = `<tr><td colspan="5" class="text-center text-secondary py-2">Sin clientes cargados.</td></tr>`;
-            } else {
-                tbody.innerHTML = this.state.clientes.map(c => {
-                    const propias = unidades.filter(u => Number(u.id_propietario) === Number(c.id_usuario));
-                    const perfilBtn = Number(c.id_usuario) === 3 ? 'USUARIO_B' : 'USUARIO_A';
-                    return `
-                        <tr>
-                            <td data-label="ID">#${c.id_usuario}</td>
-                            <td data-label="Cliente" class="fw-semibold">${c.nombre}</td>
-                            <td data-label="Correo">${c.email}</td>
-                            <td data-label="Unidades">
-                                ${propias.length
-                                    ? propias.map(p => `<span class="badge bg-success me-1">#${p.id_vehiculo} ${p.nombre}</span>`).join('')
-                                    : '<span class="text-secondary small">Ninguna asignada</span>'}
-                            </td>
-                            <td data-label="Vista Previa">
-                                <button type="button" class="btn btn-sm btn-outline-info py-0 px-2" data-switch-profile="${perfilBtn}">
-                                    <i class="bi bi-eye"></i> Ver vista
-                                </button>
-                            </td>
-                        </tr>
-                    `;
-                }).join('');
-            }
+            tbody.innerHTML = this.state.clientes.length ? this.state.clientes.map((c) => {
+                const activo = Number(c.activo ?? 1) === 1;
+                const propias = unidades.filter((u) => Number(u.id_propietario) === Number(c.id_usuario));
+                return `
+                    <tr class="${activo ? '' : 'opacity-50'}">
+                        <td data-label="ID">#${c.id_usuario}</td>
+                        <td data-label="Cliente" class="fw-semibold">${esc(c.nombre)}</td>
+                        <td data-label="Correo">${esc(c.email)}</td>
+                        <td data-label="Unidades">${propias.length
+                            ? propias.map((p) => `<span class="badge bg-success me-1">#${p.id_vehiculo} ${esc(p.nombre)}</span>`).join('')
+                            : '<span class="text-secondary small">Ninguna asignada</span>'}</td>
+                        <td data-label="Estado">
+                            <button type="button" class="btn btn-sm ${activo ? 'btn-outline-secondary' : 'btn-outline-success'} py-0 px-2" data-action="toggle-cliente" data-id="${c.id_usuario}">
+                                ${activo ? '<i class="bi bi-person-slash"></i> Desactivar' : '<i class="bi bi-person-check"></i> Activar'}
+                            </button>
+                        </td>
+                    </tr>`;
+            }).join('') : SIN_DATOS(5, this.errorCarga || 'Sin clientes en RDS');
         }
-
         if (selectCliente) {
-            selectCliente.innerHTML = this.state.clientes.map(c => `
-                <option value="${c.id_usuario}">${c.nombre} (${c.email})</option>
-            `).join('');
+            selectCliente.innerHTML = this.state.clientes
+                .filter((c) => Number(c.activo ?? 1) === 1)
+                .map((c) => `<option value="${c.id_usuario}">${esc(c.nombre)} (${esc(c.email)})</option>`).join('');
         }
     }
 
-    async renderComandosUnidadAdmin(idVehiculo = 1) {
-        this.idUnidadComandosSel = Number(idVehiculo) || 1;
+    async renderComandosUnidadAdmin(idVehiculo) {
         const cont = document.getElementById('admin-comandos-list');
         if (!cont) return;
-
-        let comandos = null;
+        if (!idVehiculo) {
+            cont.innerHTML = '<div class="text-secondary small">Sin unidades.</div>';
+            return;
+        }
+        this.idUnidadComandosSel = Number(idVehiculo);
         try {
-            comandos = await api.obtenerComandos(this.idUnidadComandosSel);
-        } catch (_) {
-            comandos = null;
+            const comandos = await api.obtenerComandos(this.idUnidadComandosSel);
+            this.comandosUnidadAdmin = Array.isArray(comandos) ? comandos : [];
+        } catch (err) {
+            this.comandosUnidadAdmin = [];
+            cont.innerHTML = `<div class="text-secondary small"><i class="bi bi-database-x"></i> Sin datos (${esc(err.status ? `HTTP ${err.status}` : 'sin conexión')})</div>`;
+            return;
         }
-
-        if (Array.isArray(comandos) && comandos.length > 0) {
-            this.comandosUnidadAdmin = comandos;
-        } else if (!this.comandosUnidadAdmin || this.comandosUnidadAdmin.length === 0) {
-            this.comandosUnidadAdmin = COMANDOS_BASE_MEMORIA.map(c => ({ ...c }));
+        if (!this.comandosUnidadAdmin.length) {
+            cont.innerHTML = '<div class="text-secondary small">Esta unidad no tiene comandos registrados en RDS.</div>';
+            return;
         }
-
         const unidad = this.obtenerUnidadEnriquecida(this.idUnidadComandosSel);
-        const modeloObj = this.state.modelos.find(m => Number(m.id_modelo) === Number(unidad.id_modelo));
-
-        cont.innerHTML = this.comandosUnidadAdmin.map(cmd => {
+        const modeloObj = this.state.modelos.find((m) => Number(m.id_modelo) === Number(unidad.id_modelo));
+        cont.innerHTML = this.comandosUnidadAdmin.map((cmd) => {
             const esDetener = normalizar(cmd.nombre) === 'DETENER';
-            const esBrazo = /BRAZO/.test(normalizar(cmd.nombre));
-            const incompatibleHardware = modeloObj && !modeloObj.tiene_brazo && esBrazo;
-            const activoEfectivo = incompatibleHardware ? false : (cmd.activo !== false && cmd.activo !== 0);
-
+            const incompatible = Boolean(modeloObj && !modeloObj.tiene_brazo && /BRAZO/.test(normalizar(cmd.nombre)));
+            const activo = !incompatible && cmd.activo !== false && Number(cmd.activo) !== 0;
             return `
-                <div class="admin-cmd-chip ${activoEfectivo ? 'is-active' : 'is-disabled'}">
+                <div class="admin-cmd-chip ${activo ? 'is-active' : 'is-disabled'}">
                     <div>
-                        <div class="fw-semibold">${cmd.nombre} <small class="text-secondary">(Cód. ${cmd.codigo})</small></div>
-                        <small class="text-secondary">${incompatibleHardware ? 'No compatible con este modelo' : (esDetener ? 'Paro prioritario obligatorio' : 'Capacidad habilitada')}</small>
+                        <div class="fw-semibold">${esc(cmd.nombre)} <small class="text-secondary">(Cód. ${esc(cmd.codigo)})</small></div>
+                        <small class="text-secondary">${incompatible ? 'No compatible con este modelo' : (esDetener ? 'Paro prioritario obligatorio' : (activo ? 'Habilitado' : 'Deshabilitado'))}</small>
                     </div>
                     <div class="form-check form-switch m-0">
-                        <input class="form-check-input" type="checkbox"
-                            data-action="toggle-cmd-activo"
-                            data-id="${cmd.id_comando}"
-                            ${activoEfectivo ? 'checked' : ''}
-                            ${esDetener || incompatibleHardware ? 'disabled' : ''}>
+                        <input class="form-check-input" type="checkbox" data-action="toggle-cmd-activo" data-id="${cmd.id_comando}"
+                            ${activo ? 'checked' : ''} ${esDetener || incompatible ? 'disabled' : ''}>
                     </div>
-                </div>
-            `;
+                </div>`;
         }).join('');
     }
 
     renderAuditoria() {
         const tbody = document.getElementById('tabla-admin-auditoria');
         if (!tbody) return;
-        if (!this.state.auditoria || this.state.auditoria.length === 0) {
-            tbody.innerHTML = `<tr><td colspan="4" class="text-center text-secondary py-2">Sin eventos registrados aún en RDS.</td></tr>`;
+        if (!this.state.auditoria.length) {
+            tbody.innerHTML = SIN_DATOS(4, this.errorCarga || 'Sin eventos registrados en RDS');
             return;
         }
-        tbody.innerHTML = this.state.auditoria.slice(0, 20).map(ev => {
+        tbody.innerHTML = this.state.auditoria.slice(0, 25).map((ev) => {
             const { fecha, hora } = ui.formatearFechaHora(ev.fecha_hora);
-            const isAlert = /BLOQUEADO|SIN_SOPORTE|RECHAZADO|PRUEBA/.test(ev.accion);
+            const alerta = /BLOQUEAD|FALLIDO|SIN_SOPORTE|RECHAZ|EXPIRACION/.test(ev.accion || '');
             return `
-                <tr class="${isAlert ? 'table-danger-row' : ''}">
-                    <td data-label="Evento"><span class="badge ${isAlert ? 'bg-danger' : 'bg-secondary'}">${ev.accion}</span></td>
-                    <td data-label="Actor / Rol"><strong>${ev.actor || 'Usuario'}</strong> <small class="text-secondary">(${ev.rol})</small></td>
-                    <td data-label="Detalle">${ev.detalle || ''}</td>
-                    <td data-label="Fecha / Hora" class="small">${fecha} ${hora}</td>
-                </tr>
-            `;
+                <tr class="${alerta ? 'table-danger-row' : ''}">
+                    <td data-label="Evento"><span class="badge ${alerta ? 'bg-danger' : 'bg-secondary'}">${esc(ev.accion)}</span></td>
+                    <td data-label="Actor / Rol"><strong>${esc(ev.actor || 'Sistema')}</strong> <small class="text-secondary">(${esc(ev.rol)})</small></td>
+                    <td data-label="Detalle">${esc(ev.detalle)}</td>
+                    <td data-label="Fecha / Hora" class="small">${esc(fecha)} ${esc(hora)}</td>
+                </tr>`;
         }).join('');
     }
 
     renderMisVehiculosUsuario() {
         const cont = document.getElementById('usuario-mis-vehiculos-grid');
         if (!cont) return;
-
-        const misUnidades = this.obtenerUnidadesVisiblesPorRol();
-        if (misUnidades.length === 0) {
+        const mis = this.obtenerUnidadesVisiblesPorRol();
+        if (!mis.length) {
             cont.innerHTML = `
                 <div class="admin-empty-state">
                     <i class="bi bi-car-front fs-2 text-secondary"></i>
-                    <p class="mb-0 mt-2">Aún no tienes unidades asignadas a tu cuenta de comprador en RDS.</p>
-                </div>
-            `;
+                    <p class="mb-0 mt-2">${esc(this.errorCarga ? `Sin datos: ${this.errorCarga}` : 'Aún no tienes unidades asignadas a tu cuenta.')}</p>
+                </div>`;
             return;
         }
-
         const idActivo = CONFIG.VEHICULO_ACTIVO_LOGICO || CONFIG.VEHICULO_ID;
-        cont.innerHTML = misUnidades.map(u => {
-            const esActiva = Number(u.id_vehiculo) === Number(idActivo);
+        cont.innerHTML = mis.map((u) => {
+            const activa = Number(u.id_vehiculo) === Number(idActivo);
             return `
-                <div class="user-vehicle-card ${esActiva ? 'is-selected' : ''}">
+                <div class="user-vehicle-card ${activa ? 'is-selected' : ''}">
                     <div class="d-flex justify-content-between align-items-start gap-2 mb-2">
                         <div>
                             <span class="badge bg-success mb-1"><i class="bi bi-patch-check-fill"></i> PROPIETARIO TITULAR</span>
-                            <h3 class="h6 mb-0 fw-bold">${u.nombre}</h3>
-                            <small class="text-secondary">${u.modelo} · Serie: <code>${u.numero_serie}</code></small>
+                            <h3 class="h6 mb-0 fw-bold">${esc(u.nombre)}</h3>
+                            <small class="text-secondary">${esc(u.modelo)} · Serie: <code>${esc(u.numero_serie)}</code></small>
                         </div>
                         <span class="badge bg-dark border border-secondary">ID #${u.id_vehiculo}</span>
                     </div>
-                    <p class="small text-secondary mb-3">${u.descripcion || 'Unidad IoT asignada a tu cuenta con telemetría y control privado.'}</p>
-
+                    <p class="small text-secondary mb-2">
+                        Último comando: <b>${esc(u.ultimo_comando || 'Sin datos')}</b> ·
+                        ${u.conectado === undefined || u.conectado === null ? 'Conexión: sin verificar' : (Number(u.conectado) ? 'Último reporte: conectado' : 'Último reporte: desconectado')}
+                    </p>
                     <div class="support-consent-box mb-3">
                         <div class="form-check form-switch">
                             <input class="form-check-input" type="checkbox" id="switch-soporte-${u.id_vehiculo}"
-                                data-action="toggle-soporte-propietario" data-id="${u.id_vehiculo}"
-                                ${u.soporte_autorizado ? 'checked' : ''}>
-                            <label class="form-check-label small fw-semibold" for="switch-soporte-${u.id_vehiculo}">
-                                Autorizar soporte técnico al Administrador (30 min)
-                            </label>
+                                data-action="toggle-soporte-propietario" data-id="${u.id_vehiculo}" ${u.soporte_autorizado ? 'checked' : ''}>
+                            <label class="form-check-label small fw-semibold" for="switch-soporte-${u.id_vehiculo}">Autorizar soporte técnico al Administrador (30 min)</label>
                         </div>
-                        <small class="d-block text-secondary mt-1">
-                            ${u.soporte_autorizado
-                                ? '<span class="text-warning"><i class="bi bi-unlock-fill"></i> El Administrador tiene permiso temporal en RDS para probar tu unidad.</span>'
-                                : '<span class="text-success"><i class="bi bi-shield-lock-fill"></i> Control privado: ni el Administrador ni otros usuarios pueden mover tu vehículo (403).</span>'}
-                        </small>
+                        <small class="d-block text-secondary mt-1">${u.soporte_autorizado
+                            ? `<span class="text-warning"><i class="bi bi-unlock-fill"></i> El Administrador puede operar tu unidad${u.soporte_expira_en ? ` hasta ${esc(ui.formatearFechaHora(u.soporte_expira_en).hora)}` : ''}.</span>`
+                            : '<span class="text-success"><i class="bi bi-shield-lock-fill"></i> Control privado: sólo tú puedes mover tu vehículo.</span>'}</small>
                     </div>
-
-                    <div class="d-flex flex-wrap gap-2">
-                        <button type="button" class="btn btn-sm ${esActiva ? 'btn-info text-dark fw-bold' : 'btn-outline-info'}"
-                            data-action="seleccionar-mi-vehiculo" data-id="${u.id_vehiculo}">
-                            <i class="bi bi-controller"></i> ${esActiva ? 'Unidad Activa en Control' : 'Usar en Control y Monitoreo'}
-                        </button>
-                    </div>
-                </div>
-            `;
+                    <button type="button" class="btn btn-sm ${activa ? 'btn-info text-dark fw-bold' : 'btn-outline-info'}" data-action="seleccionar-mi-vehiculo" data-id="${u.id_vehiculo}">
+                        <i class="bi bi-controller"></i> ${activa ? 'Unidad activa en Control' : 'Usar en Control y Monitoreo'}
+                    </button>
+                </div>`;
         }).join('');
     }
 
-    _obtenerListaDemosMemoria(idVehiculo = 1) {
-        if (Array.isArray(this.state.demosMemoria)) {
-            return this.state.demosMemoria;
-        }
-        if (this.state.demosMemoria && typeof this.state.demosMemoria === 'object') {
-            return this.state.demosMemoria[idVehiculo] || this.state.demosMemoria[1] || [];
-        }
-        this.state.demosMemoria = [];
-        return this.state.demosMemoria;
+    _puedeEditarDemo(demo) {
+        const rol = this.sesion?.rol;
+        const tipo = demo?.tipo_demo || 'EMPRESA';
+        if (rol === 'ADMIN') return tipo !== 'PRIVADA';
+        if (rol === 'USUARIO') return tipo === 'PRIVADA' && Number(demo.id_usuario_creador) === Number(this.sesion.id_usuario);
+        return false;
     }
 
-    async cargarDemosParaEditor(idVehiculo = 1) {
+    async cargarDemosParaEditor(idVehiculo) {
         const contDemos = document.getElementById('editor-demos-lista');
         const selectCmdPaso = document.getElementById('step-form-comando');
-        if (!contDemos) return;
+        const etiquetaUnidad = document.getElementById('editor-demos-unidad');
+        if (!contDemos || !idVehiculo) return;
+        if (etiquetaUnidad) etiquetaUnidad.textContent = `Unidad activa: #${idVehiculo} ${this.obtenerUnidadEnriquecida(idVehiculo).nombre}`;
 
-        let demos = [];
-        let comandos = [];
+        let demos;
+        let comandos;
         try {
-            const [resDemos, resCmds] = await Promise.all([
-                api.obtenerDemos(idVehiculo),
-                api.obtenerComandos(idVehiculo)
-            ]);
-            if (Array.isArray(resDemos) && resDemos.length > 0) demos = resDemos;
-            if (Array.isArray(resCmds) && resCmds.length > 0) comandos = resCmds;
-        } catch (_) {
-            // Fallback local cuando AWS está desconectado
+            [demos, comandos] = await Promise.all([api.obtenerDemos(idVehiculo), api.obtenerComandos(idVehiculo)]);
+        } catch (err) {
+            contDemos.innerHTML = `<div class="text-secondary small"><i class="bi bi-database-x"></i> Sin datos (${esc(err.status ? `HTTP ${err.status}: ${err.message}` : 'sin conexión con AWS')})</div>`;
+            this.demosUnidadEditor = [];
+            this.renderPasosDemoEditor([]);
+            return;
         }
-
-        if (demos.length === 0) {
-            demos = this._obtenerListaDemosMemoria(idVehiculo);
-        }
-        if (comandos.length === 0) {
-            if (!this.state.comandosMemoria) this.state.comandosMemoria = {};
-            if (!this.state.comandosMemoria[idVehiculo]) {
-                this.state.comandosMemoria[idVehiculo] = COMANDOS_BASE_MEMORIA.map(c => ({ ...c }));
-            }
-            comandos = this.state.comandosMemoria[idVehiculo];
-        }
-
         this.demosUnidadEditor = Array.isArray(demos) ? demos : [];
-        const comandosActivos = (Array.isArray(comandos) ? comandos : []).filter(c => c.activo !== false && c.activo !== 0);
-
+        const activos = (Array.isArray(comandos) ? comandos : []).filter((c) => c.activo !== false && Number(c.activo) !== 0);
         if (selectCmdPaso) {
-            selectCmdPaso.innerHTML = comandosActivos.map(c => `
-                <option value="${c.id_comando}">${c.nombre} (ID ${c.id_comando})</option>
-            `).join('');
+            selectCmdPaso.innerHTML = activos.map((c) => `<option value="${c.id_comando}">${esc(c.nombre)} (ID ${c.id_comando})</option>`).join('');
         }
-
-        if (this.demosUnidadEditor.length === 0) {
-            contDemos.innerHTML = `<div class="text-secondary small">No hay secuencias demo registradas para esta unidad.</div>`;
+        if (!this.demosUnidadEditor.length) {
+            contDemos.innerHTML = '<div class="text-secondary small">No hay secuencias demo registradas para esta unidad.</div>';
             this.idDemoSeleccionada = null;
             this.renderPasosDemoEditor([]);
             return;
         }
-
-        if (!this.idDemoSeleccionada || !this.demosUnidadEditor.some(d => Number(d.id_demo) === Number(this.idDemoSeleccionada))) {
+        if (!this.demosUnidadEditor.some((d) => Number(d.id_demo) === Number(this.idDemoSeleccionada))) {
             this.idDemoSeleccionada = this.demosUnidadEditor[0].id_demo;
         }
-
-        contDemos.innerHTML = this.demosUnidadEditor.map(d => {
-            const tipo = d.tipo_demo || (d.id_demo === 1 ? 'EMPRESA' : 'PRIVADA');
+        contDemos.innerHTML = this.demosUnidadEditor.map((d) => {
+            const tipo = d.tipo_demo || 'EMPRESA';
             const sel = Number(d.id_demo) === Number(this.idDemoSeleccionada);
+            const editable = this._puedeEditarDemo(d);
             return `
                 <div class="demo-editor-item ${sel ? 'active' : ''}">
                     <div class="demo-editor-item-main" data-action="seleccionar-demo-editor" data-id="${d.id_demo}">
                         <div class="d-flex align-items-center gap-2">
-                            <span class="badge ${tipo === 'EMPRESA' ? 'bg-info text-dark' : 'bg-warning text-dark'}">${tipo}</span>
-                            <strong>${d.nombre}</strong>
+                            <span class="badge ${tipo === 'PRIVADA' ? 'bg-warning text-dark' : 'bg-info text-dark'}">${esc(tipo)}</span>
+                            <strong>${esc(d.nombre)}</strong>
+                            ${editable ? '' : '<i class="bi bi-lock-fill text-secondary" title="Sólo lectura: no eres su propietario"></i>'}
                         </div>
-                        <small class="text-secondary">${d.descripcion || 'Secuencia programada en RDS'}</small>
+                        <small class="text-secondary">${esc(d.descripcion || '')}</small>
                     </div>
                     <div class="d-flex gap-1">
-                        <button type="button" class="btn btn-sm btn-outline-success py-0 px-2" data-action="ejecutar-demo-desde-editor" data-id="${d.id_demo}" title="Ir a Control y ejecutar">
-                            <i class="bi bi-play-fill"></i>
-                        </button>
-                        <button type="button" class="btn btn-sm btn-outline-danger py-0 px-2" data-action="eliminar-demo-editor" data-id="${d.id_demo}" title="Eliminar demo">
-                            <i class="bi bi-trash"></i>
-                        </button>
+                        <button type="button" class="btn btn-sm btn-outline-success py-0 px-2" data-action="ejecutar-demo-desde-editor" data-id="${d.id_demo}" title="Seleccionar en Control"><i class="bi bi-play-fill"></i></button>
+                        <button type="button" class="btn btn-sm btn-outline-danger py-0 px-2" data-action="eliminar-demo-editor" data-id="${d.id_demo}" ${editable ? '' : 'disabled'} title="${editable ? 'Eliminar demo' : 'Sólo su propietario puede eliminarla'}"><i class="bi bi-trash"></i></button>
                     </div>
-                </div>
-            `;
+                </div>`;
         }).join('');
-
         await this.cargarPasosDeDemoSeleccionada(this.idDemoSeleccionada);
     }
 
     async cargarPasosDeDemoSeleccionada(idDemo) {
         this.idDemoSeleccionada = Number(idDemo);
+        const demoObj = this.demosUnidadEditor.find((d) => Number(d.id_demo) === this.idDemoSeleccionada);
         const label = document.getElementById('editor-pasos-titulo');
-        const demoObj = this.demosUnidadEditor.find(d => Number(d.id_demo) === this.idDemoSeleccionada);
-        if (label) {
-            label.textContent = demoObj ? `Pasos de: ${demoObj.nombre} (#${demoObj.id_demo})` : 'Pasos de la secuencia';
-        }
-
+        if (label) label.textContent = demoObj ? `Pasos de: ${demoObj.nombre} (#${demoObj.id_demo})` : 'Pasos de la secuencia';
+        const formPaso = document.getElementById('form-editor-agregar-paso');
+        const editable = this._puedeEditarDemo(demoObj);
+        formPaso?.querySelectorAll('input, select, button').forEach((el) => { el.disabled = !editable; });
         try {
             const pasos = await api.obtenerMovimientosDemo(this.idDemoSeleccionada);
-            if (Array.isArray(pasos) && pasos.length > 0) {
-                this.movimientosDemoActual = pasos.sort((a, b) => Number(a.orden) - Number(b.orden));
-                this.renderPasosDemoEditor(this.movimientosDemoActual);
-                return;
-            }
-        } catch (_) {
-            // Fallback a pasos en memoria local
+            this.movimientosDemoActual = (Array.isArray(pasos) ? pasos : []).sort((a, b) => Number(a.orden) - Number(b.orden));
+            this.renderPasosDemoEditor(this.movimientosDemoActual, editable);
+        } catch (err) {
+            this.movimientosDemoActual = [];
+            const tbody = document.getElementById('tabla-editor-pasos');
+            if (tbody) tbody.innerHTML = SIN_DATOS(5, `Sin datos (${err.status ? `HTTP ${err.status}: ${err.message}` : 'sin conexión'})`);
         }
-
-        const pasosLocales = Array.isArray(demoObj?.pasos) ? [...demoObj.pasos] : [];
-        this.movimientosDemoActual = pasosLocales.sort((a, b) => Number(a.orden) - Number(b.orden));
-        this.renderPasosDemoEditor(this.movimientosDemoActual);
     }
 
-    renderPasosDemoEditor(pasos) {
+    renderPasosDemoEditor(pasos, editable = false) {
         const tbody = document.getElementById('tabla-editor-pasos');
         if (!tbody) return;
-
-        if (!pasos || pasos.length === 0) {
-            tbody.innerHTML = `
-                <tr>
-                    <td colspan="5" class="text-center text-secondary py-3">
-                        Esta secuencia aún no tiene pasos. Agrega un movimiento abajo.
-                    </td>
-                </tr>
-            `;
+        if (!pasos || !pasos.length) {
+            tbody.innerHTML = SIN_DATOS(5, editable ? 'Esta secuencia aún no tiene pasos. Agrega un movimiento abajo.' : 'Esta secuencia no tiene pasos.');
             return;
         }
-
+        const dis = editable ? '' : 'disabled';
         tbody.innerHTML = pasos.map((p, idx) => `
             <tr>
-                <td data-label="Orden"><span class="monitor-row-num">${p.orden}</span></td>
-                <td data-label="Comando" class="fw-semibold">${p.comando || `Comando #${p.id_comando}`}</td>
-                <td data-label="Duración">${p.duracion_ms} ms</td>
-                <td data-label="Pausa">${p.pausa_ms} ms</td>
+                <td data-label="Orden"><span class="monitor-row-num">${esc(p.orden)}</span></td>
+                <td data-label="Comando" class="fw-semibold">${esc(p.comando || `Comando #${p.id_comando}`)}</td>
+                <td data-label="Duración">${esc(p.duracion_ms)} ms</td>
+                <td data-label="Pausa">${esc(p.pausa_ms)} ms</td>
                 <td data-label="Acciones">
                     <div class="d-flex gap-1 justify-content-end justify-content-md-center">
-                        <button type="button" class="btn btn-sm btn-outline-light py-0 px-2"
-                            data-action="mover-paso-arriba" data-idx="${idx}" ${idx === 0 ? 'disabled' : ''} title="Subir paso">
-                            <i class="bi bi-arrow-up"></i>
-                        </button>
-                        <button type="button" class="btn btn-sm btn-outline-light py-0 px-2"
-                            data-action="mover-paso-abajo" data-idx="${idx}" ${idx === pasos.length - 1 ? 'disabled' : ''} title="Bajar paso">
-                            <i class="bi bi-arrow-down"></i>
-                        </button>
-                        <button type="button" class="btn btn-sm btn-outline-danger py-0 px-2"
-                            data-action="eliminar-paso-demo" data-id="${p.id_demo_movimiento}" title="Quitar paso">
-                            <i class="bi bi-x-lg"></i>
-                        </button>
+                        <button type="button" class="btn btn-sm btn-outline-light py-0 px-2" data-action="mover-paso-arriba" data-idx="${idx}" ${idx === 0 ? 'disabled' : dis} title="Subir"><i class="bi bi-arrow-up"></i></button>
+                        <button type="button" class="btn btn-sm btn-outline-light py-0 px-2" data-action="mover-paso-abajo" data-idx="${idx}" ${idx === pasos.length - 1 ? 'disabled' : dis} title="Bajar"><i class="bi bi-arrow-down"></i></button>
+                        <button type="button" class="btn btn-sm btn-outline-danger py-0 px-2" data-action="eliminar-paso-demo" data-id="${p.id_demo_movimiento}" ${dis} title="Quitar"><i class="bi bi-x-lg"></i></button>
                     </div>
                 </td>
-            </tr>
-        `).join('');
+            </tr>`).join('');
     }
 
     renderPanelInvitado() {
         const catCont = document.getElementById('invitado-catalogo-grid');
         const boxReserva = document.getElementById('invitado-reserva-status');
         if (catCont) {
-            catCont.innerHTML = this.state.modelos.map(m => `
+            const modelos = this.state.modelos.filter((m) => Number(m.activo ?? 1) === 1);
+            catCont.innerHTML = modelos.length ? modelos.map((m) => `
                 <div class="user-vehicle-card">
                     <div class="d-flex justify-content-between align-items-center mb-2">
-                        <span class="badge bg-info text-dark">${m.codigo_modelo}</span>
-                        <span class="badge bg-dark border border-secondary">${m.microcontrolador_default}</span>
+                        <span class="badge bg-info text-dark">${esc(m.codigo_modelo)}</span>
+                        <span class="badge bg-dark border border-secondary">${esc(m.microcontrolador_default)}</span>
                     </div>
-                    <h3 class="h6 fw-bold mb-1">${m.nombre}</h3>
-                    <p class="small text-secondary mb-2">${m.descripcion}</p>
-                    <div class="small">
-                        <span class="badge ${m.tiene_brazo ? 'bg-success' : 'bg-secondary'} me-1">Brazo Hidráulico: ${m.tiene_brazo ? 'Incluido' : 'No aplica'}</span>
-                        <span class="badge bg-primary">Demos Preconfiguradas</span>
-                    </div>
-                </div>
-            `).join('');
+                    <h3 class="h6 fw-bold mb-1">${esc(m.nombre)}</h3>
+                    <p class="small text-secondary mb-2">${esc(m.descripcion || '')}</p>
+                    <span class="badge ${m.tiene_brazo ? 'bg-success' : 'bg-secondary'}">Brazo hidráulico: ${m.tiene_brazo ? 'Incluido' : 'No aplica'}</span>
+                </div>`).join('')
+                : `<div class="admin-empty-state"><i class="bi bi-database-x fs-2 text-secondary"></i><p class="mb-0 mt-2">${esc(this.errorCarga ? `Sin datos: ${this.errorCarga}` : 'Sin modelos publicados.')}</p></div>`;
         }
-
         if (boxReserva) {
             const res = this.state.reservaInvitado;
             const activa = res && res.activa && res.expira_ts > Date.now();
+            const exhibicion = this.unidadesRds;
+            const libres = exhibicion.filter((u) => !u.sesion_activa).length;
             boxReserva.innerHTML = activa ? `
                 <div class="d-flex flex-wrap align-items-center justify-content-between gap-2">
                     <div>
-                        <span class="badge bg-success me-2"><i class="bi bi-broadcast-pin"></i> RESERVA EXCLUSIVA ACTIVA EN RDS</span>
-                        <strong>${res.nombre_vehiculo}</strong> · Operador: <span class="text-info">${res.operador}</span>
+                        <span class="badge bg-success me-2"><i class="bi bi-broadcast-pin"></i> RESERVA EXCLUSIVA ACTIVA</span>
+                        <strong>${esc(res.nombre_vehiculo)}</strong> · Operador: <span class="text-info">${esc(res.operador)}</span>
+                        <div class="small text-secondary mt-1">Comandos disponibles: avanzar, retroceder, girar, luz, sonido y detener.</div>
                     </div>
                     <div class="d-flex align-items-center gap-2">
-                        <span class="badge bg-warning text-dark fs-6"><i class="bi bi-stopwatch"></i> <span id="guest-countdown-timer">03:00</span></span>
-                        <button type="button" class="btn btn-sm btn-info text-dark fw-bold" data-action="ir-control-invitado">
-                            <i class="bi bi-controller"></i> Probar Unidad Ahora
-                        </button>
-                        <button type="button" class="btn btn-sm btn-outline-danger" data-action="finalizar-reserva-invitado">
-                            <i class="bi bi-stop-circle"></i> Finalizar y Detener
-                        </button>
+                        <span class="badge bg-warning text-dark fs-6"><i class="bi bi-stopwatch"></i> <span id="guest-countdown-timer">--:--</span></span>
+                        <button type="button" class="btn btn-sm btn-info text-dark fw-bold" data-action="ir-control-invitado"><i class="bi bi-controller"></i> Probar ahora</button>
+                        <button type="button" class="btn btn-sm btn-outline-danger" data-action="finalizar-reserva-invitado"><i class="bi bi-stop-circle"></i> Finalizar y detener</button>
                     </div>
-                </div>
-            ` : `
+                </div>` : `
                 <div class="d-flex flex-wrap align-items-center justify-content-between gap-2">
                     <div>
-                        <span class="badge bg-secondary me-2">MODO VISITANTE / PROSPECTO</span>
-                        <span>Puedes consultar el catálogo público o iniciar una reserva temporal exclusiva de 3 minutos en la unidad de exhibición.</span>
+                        <span class="badge bg-secondary me-2">VISITANTE</span>
+                        <span class="small">${exhibicion.length
+                            ? `${libres} de ${exhibicion.length} unidad(es) de exhibición libre(s). La prueba dura 3 minutos y es exclusiva.`
+                            : esc(this.errorCarga ? `Sin datos: ${this.errorCarga}` : 'No hay unidades de exhibición en este momento.')}</span>
                     </div>
-                    <button type="button" class="btn btn-sm btn-success fw-bold" data-action="renovar-reserva-invitado">
-                        <i class="bi bi-play-circle-fill"></i> Solicitar Reserva de Exhibición (3 min)
-                    </button>
-                </div>
-            `;
+                </div>`;
+            if (activa) this._iniciarRelojInvitado();
+        }
+    }
+
+    // ------------------------------------------------------------------ eventos
+
+    async _ejecutar(accion, mensajeOk, { recargar = true } = {}) {
+        try {
+            const r = await accion();
+            if (mensajeOk) ui.showFeedback(mensajeOk, 'success', 2500);
+            if (recargar) await this.sincronizarDesdeRds();
+            return r;
+        } catch (err) {
+            ui.playSound('cancel');
+            ui.showFeedback(err.status ? `${err.status}: ${err.message}` : 'Sin conexión con AWS: no se guardó nada', 'danger', 4500);
+            return undefined;
         }
     }
 
     _bindEvents() {
-        const selHeader = document.getElementById('header-unit-select');
-        if (selHeader) {
-            selHeader.addEventListener('change', (e) => {
-                this.seleccionarUnidadActiva(Number(e.target.value), true);
-            });
-        }
-
-        const btnRole = document.getElementById('btn-role-switcher');
-        if (btnRole) {
-            btnRole.addEventListener('click', () => {
-                document.getElementById('btn-tab-admin')?.click();
-            });
-        }
-
-        // Botones para rellenar únicamente el correo de prueba (NUNCA la contraseña)
-        document.querySelectorAll('[data-fill-email]').forEach(btn => {
+        document.getElementById('header-unit-select')?.addEventListener('change', (e) => {
+            if (e.target.value) this.seleccionarUnidadActiva(Number(e.target.value), true);
+        });
+        document.getElementById('btn-role-switcher')?.addEventListener('click', () => {
+            document.getElementById('btn-tab-admin')?.click();
+        });
+        // Rellena sólo el correo de las cuentas de prueba (la contraseña NUNCA está en el código)
+        document.querySelectorAll('[data-fill-email]').forEach((btn) => {
             btn.addEventListener('click', () => {
                 const emailInput = document.getElementById('auth-login-email');
-                const passInput = document.getElementById('auth-login-password');
-                if (emailInput) {
-                    emailInput.value = btn.getAttribute('data-fill-email') || '';
-                }
-                if (passInput) {
-                    passInput.focus();
-                }
+                if (emailInput) emailInput.value = btn.getAttribute('data-fill-email') || '';
+                document.getElementById('auth-login-password')?.focus();
             });
         });
 
@@ -1249,228 +831,112 @@ class AdminManager {
                 await this.cerrarSesionActual();
                 return;
             }
-
-            const profileEl = e.target.closest('[data-switch-profile]');
-            if (profileEl) {
-                const clave = profileEl.getAttribute('data-switch-profile');
-                await this.cambiarPerfilRapido(clave);
-                return;
-            }
-
             const actionEl = e.target.closest('[data-action]');
-            if (!actionEl) return;
+            if (!actionEl || actionEl.disabled) return;
             const action = actionEl.getAttribute('data-action');
             const id = Number(actionEl.getAttribute('data-id'));
 
-            if (action === 'intentar-operar-admin') {
-                const check = this.verificarPermisoOperacion(id, false);
-                if (!check.ok) {
-                    try { await api.ejecutarMovimiento(1, id); } catch (_) {}
-                    await this.sincronizarDesdeRds();
-                    return;
+            switch (action) {
+                case 'intentar-operar-admin':
+                    await this.seleccionarUnidadActiva(id, true);
+                    if (this.verificarPermisoOperacion(id, false).ok) document.getElementById('btn-tab-control')?.click();
+                    break;
+                case 'revocar-unidad':
+                    await this._ejecutar(() => api.revocarAsignacion(id, 'DISPONIBLE'), `Unidad #${id} liberada (DISPONIBLE)`);
+                    break;
+                case 'cambiar-exhibicion': {
+                    const u = this.obtenerUnidadEnriquecida(id);
+                    const nuevo = u.estado_comercial === 'EXHIBICION' ? 'DISPONIBLE' : 'EXHIBICION';
+                    await this._ejecutar(() => api.actualizarUnidadAdmin(id, this._datosUnidad(u, { estado_comercial: nuevo })), `Unidad #${id} ahora en ${nuevo}`);
+                    break;
                 }
-                await this.seleccionarUnidadActiva(id, true);
-                document.getElementById('btn-tab-control')?.click();
-            }
-
-            if (action === 'revocar-unidad') {
-                try {
-                    await api.revocarAsignacion(id, 'DISPONIBLE');
-                    await this.sincronizarDesdeRds();
-                } catch (_) {
-                    if (!this.state.metaUnidades[id]) this.state.metaUnidades[id] = {};
-                    this.state.metaUnidades[id].estado_comercial = 'DISPONIBLE';
-                    this.state.metaUnidades[id].id_propietario = null;
-                    this.state.metaUnidades[id].nombre_propietario = null;
-                    this.state.metaUnidades[id].email_propietario = null;
-                    this.state.metaUnidades[id].soporte_autorizado = false;
-                    this._guardarEstado();
-                    this.registrarAuditoria({
-                        accion: 'REVOCAR_ASIGNACION',
-                        id_vehiculo: id,
-                        resultado: 'AUTORIZADO (200)',
-                        motivo: 'Asignación liberada a estado DISPONIBLE'
-                    });
-                    this.renderizarTodo();
-                }
-                ui.showFeedback(`Unidad #${id} liberada a estado DISPONIBLE`, 'warning', 2500);
-            }
-
-            if (action === 'cambiar-exhibicion') {
-                const unidad = this.obtenerUnidadEnriquecida(id);
-                const nuevo = unidad.estado_comercial === 'EXHIBICION' ? 'DISPONIBLE' : 'EXHIBICION';
-                try {
-                    await api.revocarAsignacion(id, nuevo);
-                    await this.sincronizarDesdeRds();
-                } catch (_) {
-                    if (!this.state.metaUnidades[id]) this.state.metaUnidades[id] = {};
-                    this.state.metaUnidades[id].estado_comercial = nuevo;
-                    this._guardarEstado();
-                    this.renderizarTodo();
-                }
-                ui.showFeedback(`Unidad #${id} cambiada a ${nuevo}`, 'info', 2500);
-            }
-
-            if (action === 'seleccionar-mi-vehiculo') {
-                await this.seleccionarUnidadActiva(id, true);
-                this.renderMisVehiculosUsuario();
-                document.getElementById('btn-tab-control')?.click();
-            }
-
-            if (action === 'seleccionar-demo-editor') {
-                ui.playSound('tap');
-                await this.cargarPasosDeDemoSeleccionada(id);
-                await this.cargarDemosParaEditor(CONFIG.VEHICULO_ID);
-            }
-
-            if (action === 'ejecutar-demo-desde-editor') {
-                document.getElementById('btn-tab-control')?.click();
-                const selectDemo = document.getElementById('demo-select');
-                if (selectDemo) {
-                    selectDemo.value = String(id);
-                }
-                ui.showFeedback('Secuencia seleccionada en el panel de Control', 'success', 2400);
-            }
-
-            if (action === 'eliminar-demo-editor') {
-                try {
-                    await api.eliminarDemo(id);
-                } catch (_) {
-                    const vid = CONFIG.VEHICULO_ID || 1;
-                    const lista = this._obtenerListaDemosMemoria(vid);
-                    const idx = lista.findIndex(d => Number(d.id_demo) === id);
-                    if (idx !== -1) lista.splice(idx, 1);
-                    this._guardarEstado();
-                }
-                ui.showFeedback('Secuencia DEMO eliminada', 'warning', 2400);
-                await this.cargarDemosParaEditor(CONFIG.VEHICULO_ID);
-                if (this.onUnitChanged) await this.onUnitChanged(CONFIG.VEHICULO_ID);
-            }
-
-            if (action === 'eliminar-paso-demo') {
-                try {
-                    await api.eliminarMovimientoDemo(id);
-                } catch (_) {
-                    const demoObj = this.demosUnidadEditor.find(d => Number(d.id_demo) === Number(this.idDemoSeleccionada));
-                    if (demoObj && Array.isArray(demoObj.pasos)) {
-                        demoObj.pasos = demoObj.pasos.filter(p => Number(p.id_demo_movimiento) !== id);
-                        this._guardarEstado();
+                case 'baja-unidad':
+                    if (confirm(`¿Dar de baja la unidad #${id}? Se conserva su historial (baja lógica).`)) {
+                        await this._ejecutar(() => api.darDeBajaUnidad(id), `Unidad #${id} dada de baja`);
                     }
+                    break;
+                case 'reactivar-unidad': {
+                    const u = this.obtenerUnidadEnriquecida(id);
+                    await this._ejecutar(() => api.actualizarUnidadAdmin(id, this._datosUnidad(u, { estado_comercial: 'DISPONIBLE', activo: true })), `Unidad #${id} reactivada`);
+                    break;
                 }
-                ui.playSound('cancel');
-                ui.showFeedback('Paso eliminado de la secuencia', 'warning', 2000);
-                await this.cargarPasosDeDemoSeleccionada(this.idDemoSeleccionada);
-            }
-
-            if (action === 'mover-paso-arriba' || action === 'mover-paso-abajo') {
-                const idx = Number(actionEl.getAttribute('data-idx'));
-                const targetIdx = action === 'mover-paso-arriba' ? idx - 1 : idx + 1;
-                if (targetIdx < 0 || targetIdx >= this.movimientosDemoActual.length) return;
-
-                const pasoA = this.movimientosDemoActual[idx];
-                const pasoB = this.movimientosDemoActual[targetIdx];
-                try {
-                    await Promise.all([
-                        api.actualizarMovimientoDemo(pasoA.id_demo_movimiento, {
-                            id_comando: pasoA.id_comando,
-                            orden: pasoB.orden,
-                            duracion_ms: pasoA.duracion_ms,
-                            pausa_ms: pasoA.pausa_ms
-                        }),
-                        api.actualizarMovimientoDemo(pasoB.id_demo_movimiento, {
-                            id_comando: pasoB.id_comando,
-                            orden: pasoA.orden,
-                            duracion_ms: pasoB.duracion_ms,
-                            pausa_ms: pasoB.pausa_ms
-                        })
-                    ]);
-                } catch (_) {
-                    const tmpOrden = pasoA.orden;
-                    pasoA.orden = pasoB.orden;
-                    pasoB.orden = tmpOrden;
-                    this._guardarEstado();
+                case 'toggle-modelo': {
+                    const m = this.state.modelos.find((x) => Number(x.id_modelo) === id);
+                    if (!m) break;
+                    const activo = !(Number(m.activo ?? 1) === 1);
+                    await this._ejecutar(() => api.actualizarModelo(id, {
+                        nombre: m.nombre, descripcion: m.descripcion, microcontrolador_default: m.microcontrolador_default || 'ESP8266',
+                        tiene_brazo: Boolean(Number(m.tiene_brazo)), tiene_motores_giro: Boolean(Number(m.tiene_motores_giro ?? 1)), activo
+                    }), `Modelo ${m.codigo_modelo} ${activo ? 'activado' : 'desactivado'}`);
+                    break;
                 }
-                ui.playSound('tap');
-                await this.cargarPasosDeDemoSeleccionada(this.idDemoSeleccionada);
-            }
-
-            if (action === 'ir-control-invitado') {
-                document.getElementById('btn-tab-control')?.click();
-            }
-
-            if (action === 'finalizar-reserva-invitado') {
-                await this.finalizarReservaInvitado(false);
-            }
-
-            if (action === 'renovar-reserva-invitado') {
-                const inputVis = document.getElementById('guest-login-name');
-                const nombreVis = inputVis?.value?.trim() || 'Visitante Showroom';
-                try {
-                    await this.iniciarSesionInvitadoReal(nombreVis);
-                } catch (_) {
-                    this.activarReservaInvitadoLocal(nombreVis);
-                    this.renderPanelInvitado();
+                case 'toggle-cliente': {
+                    const c = this.state.clientes.find((x) => Number(x.id_usuario) === id);
+                    if (!c) break;
+                    const activo = !(Number(c.activo ?? 1) === 1);
+                    await this._ejecutar(() => api.actualizarCliente(id, { nombre: c.nombre, email: c.email, activo }),
+                        `Cliente ${c.nombre} ${activo ? 'activado' : 'desactivado'}`);
+                    break;
                 }
-            }
-
-            if (action === 'test-bola-cruzado') {
-                const idAjeno = this.sesion?.id_usuario === 3 ? 1 : 3;
-                try {
-                    await api.ejecutarMovimiento(1, idAjeno);
-                    this._mostrarResultadoPruebaSeguridad(`Respuesta inesperada: la petición sobre Unidad #${idAjeno} fue aceptada.`);
-                } catch (err) {
-                    const msg = err.status === 403
-                        ? `[BACKEND HTTP 403] ${err.message}`
-                        : `[RECHAZADO 403 BOLA] Acceso cruzado bloqueado: ${this.sesion?.nombre || 'El operador'} no es propietario de la Unidad #${idAjeno}.`;
-                    this._mostrarResultadoPruebaSeguridad(msg);
-                    this.registrarAuditoria({
-                        accion: 'PRUEBA_BOLA_CRUZADO',
-                        id_vehiculo: idAjeno,
-                        resultado: 'RECHAZADO (403)',
-                        motivo: `Intento de operar Unidad #${idAjeno} perteneciente a otro comprador.`
-                    });
-                    this.renderBitacoraAuditoria();
+                case 'seleccionar-mi-vehiculo':
+                    await this.seleccionarUnidadActiva(id, true);
+                    this.renderMisVehiculosUsuario();
+                    document.getElementById('btn-tab-control')?.click();
+                    break;
+                case 'seleccionar-demo-editor':
+                    ui.playSound('tap');
+                    this.idDemoSeleccionada = id;
+                    await this.cargarDemosParaEditor(CONFIG.VEHICULO_ID);
+                    break;
+                case 'ejecutar-demo-desde-editor': {
+                    document.getElementById('btn-tab-control')?.click();
+                    const sel = document.getElementById('demo-select');
+                    if (sel) sel.value = String(id);
+                    ui.showFeedback('Secuencia seleccionada en Control', 'success', 2200);
+                    break;
                 }
-            }
-
-            if (action === 'test-admin-sin-soporte') {
-                const u1 = this.obtenerUnidadEnriquecida(1);
-                try {
-                    await api.ejecutarMovimiento(1, 1);
-                    this._mostrarResultadoPruebaSeguridad(`La Unidad #1 tiene actualmente el soporte técnico autorizado por el propietario.`);
-                } catch (err) {
-                    const msg = u1.soporte_autorizado
-                        ? `La Unidad #1 tiene actualmente el soporte técnico autorizado por el propietario.`
-                        : `[RECHAZADO 403 PRIVACIDAD] Unidad #1 vendida a ${u1.nombre_propietario}. El Administrador NO puede operarla sin autorización de soporte.`;
-                    this._mostrarResultadoPruebaSeguridad(msg);
-                    if (!u1.soporte_autorizado) {
-                        this.registrarAuditoria({
-                            accion: 'PRUEBA_ADMIN_SIN_SOPORTE',
-                            id_vehiculo: 1,
-                            resultado: 'RECHAZADO (403)',
-                            motivo: `Privacidad activa: ${u1.nombre_propietario} no ha habilitado soporte técnico.`
-                        });
-                        this.renderBitacoraAuditoria();
+                case 'eliminar-demo-editor':
+                    if (confirm('¿Eliminar esta secuencia DEMO?')) {
+                        await this._ejecutar(() => api.eliminarDemo(id), 'Secuencia DEMO eliminada', { recargar: false });
+                        await this.cargarDemosParaEditor(CONFIG.VEHICULO_ID);
+                        if (this.onUnitChanged) await this.onUnitChanged(CONFIG.VEHICULO_ID);
                     }
+                    break;
+                case 'eliminar-paso-demo':
+                    await this._ejecutar(() => api.eliminarMovimientoDemo(id), 'Paso eliminado', { recargar: false });
+                    await this.cargarPasosDeDemoSeleccionada(this.idDemoSeleccionada);
+                    break;
+                case 'mover-paso-arriba':
+                case 'mover-paso-abajo': {
+                    const idx = Number(actionEl.getAttribute('data-idx'));
+                    const destino = action === 'mover-paso-arriba' ? idx - 1 : idx + 1;
+                    const a = this.movimientosDemoActual[idx];
+                    const b = this.movimientosDemoActual[destino];
+                    if (!a || !b) break;
+                    await this._ejecutar(() => Promise.all([
+                        api.actualizarMovimientoDemo(a.id_demo_movimiento, { id_comando: a.id_comando, orden: b.orden, duracion_ms: a.duracion_ms, pausa_ms: a.pausa_ms }),
+                        api.actualizarMovimientoDemo(b.id_demo_movimiento, { id_comando: b.id_comando, orden: a.orden, duracion_ms: b.duracion_ms, pausa_ms: b.pausa_ms })
+                    ]), null, { recargar: false });
+                    await this.cargarPasosDeDemoSeleccionada(this.idDemoSeleccionada);
+                    break;
                 }
-            }
-
-            if (action === 'test-invitado-unidad-vendida') {
-                try {
-                    await api.ejecutarMovimiento(1, 1);
-                    this._mostrarResultadoPruebaSeguridad(`Respuesta inesperada en unidad #1.`);
-                } catch (err) {
-                    this._mostrarResultadoPruebaSeguridad(
-                        `[RECHAZADO 403 INVITADO] Unidad #1 es privada (VENDIDA). El rol INVITADO solo puede operar unidades en EXHIBICIÓN (#2).`
-                    );
-                    this.registrarAuditoria({
-                        accion: 'PRUEBA_INVITADO_VENDIDA',
-                        id_vehiculo: 1,
-                        resultado: 'RECHAZADO (403)',
-                        motivo: 'Rol INVITADO restringido exclusivamente a unidades en EXHIBICION (#2).'
-                    });
-                    this.renderBitacoraAuditoria();
-                }
+                case 'ir-control-invitado':
+                    document.getElementById('btn-tab-control')?.click();
+                    break;
+                case 'finalizar-reserva-invitado':
+                    await this.finalizarReservaInvitado(false);
+                    break;
+                case 'test-bola-cruzado':
+                    await this._pruebaBola();
+                    break;
+                case 'test-admin-sin-soporte':
+                    await this._pruebaAdminSinSoporte();
+                    break;
+                case 'test-invitado-unidad-vendida':
+                    await this._pruebaInvitado();
+                    break;
+                default:
+                    break;
             }
         });
 
@@ -1480,56 +946,22 @@ class AdminManager {
                 await this.renderComandosUnidadAdmin(Number(target.value));
                 return;
             }
-
             const action = target.getAttribute('data-action');
             const id = Number(target.getAttribute('data-id'));
 
             if (action === 'toggle-soporte-propietario') {
                 const autorizado = Boolean(target.checked);
-                if (!this.state.metaUnidades[id]) this.state.metaUnidades[id] = {};
-                this.state.metaUnidades[id].soporte_autorizado = autorizado;
-                this._guardarEstado();
-                try {
-                    await api.configurarSoporte(id, autorizado, 30);
-                    await this.sincronizarDesdeRds();
-                } catch (_) {
-                    this.registrarAuditoria({
-                        accion: autorizado ? 'AUTORIZAR_SOPORTE' : 'REVOCAR_SOPORTE',
-                        id_vehiculo: id,
-                        resultado: 'AUTORIZADO (200)',
-                        motivo: autorizado ? 'Propietario habilitó soporte técnico temporal (30 min).' : 'Propietario activó privacidad exclusiva.'
-                    });
-                    this.renderizarTodo();
-                }
-                ui.showFeedback(
-                    autorizado
-                        ? 'Soporte técnico autorizado al Administrador por 30 min'
-                        : 'Soporte técnico revocado: control exclusivo privado activado',
-                    autorizado ? 'warning' : 'success',
-                    3000
-                );
+                const ok = await this._ejecutar(() => api.configurarSoporte(id, autorizado, 30),
+                    autorizado ? 'Soporte autorizado al Administrador por 30 min' : 'Soporte revocado: control privado');
+                if (ok === undefined) target.checked = !autorizado;   // el servidor no lo guardó
             }
 
             if (action === 'toggle-cmd-activo') {
-                const cmd = this.comandosUnidadAdmin.find(c => Number(c.id_comando) === id);
+                const cmd = this.comandosUnidadAdmin.find((c) => Number(c.id_comando) === id);
                 if (!cmd) return;
-                const nuevoActivo = Boolean(target.checked);
-                cmd.activo = nuevoActivo;
-                try {
-                    await api.actualizarComando(id, {
-                        nombre: cmd.nombre,
-                        codigo: cmd.codigo,
-                        descripcion: cmd.descripcion || '',
-                        activo: nuevoActivo
-                    });
-                } catch (_) {
-                    if (this.state.comandosMemoria?.[this.idUnidadComandosSel]) {
-                        const cMem = this.state.comandosMemoria[this.idUnidadComandosSel].find(x => Number(x.id_comando) === id);
-                        if (cMem) cMem.activo = nuevoActivo;
-                        this._guardarEstado();
-                    }
-                }
-                ui.showFeedback(`Comando ${cmd.nombre}: ${nuevoActivo ? 'Habilitado' : 'Deshabilitado'}`, 'info', 2200);
+                const activo = Boolean(target.checked);
+                await this._ejecutar(() => api.actualizarComando(id, { nombre: cmd.nombre, codigo: cmd.codigo, descripcion: cmd.descripcion || '', activo }),
+                    `Comando ${cmd.nombre}: ${activo ? 'habilitado' : 'deshabilitado'}`, { recargar: false });
                 await this.renderComandosUnidadAdmin(this.idUnidadComandosSel);
                 if (this.onUnitChanged) await this.onUnitChanged(CONFIG.VEHICULO_ID);
             }
@@ -1538,294 +970,224 @@ class AdminManager {
         this._bindForms();
     }
 
-    _mostrarResultadoPruebaSeguridad(texto) {
-        const box = document.getElementById('security-test-output');
-        if (box) {
-            box.classList.remove('d-none');
-            box.innerHTML = `<i class="bi bi-shield-check text-warning me-1"></i> ${texto}`;
+    _datosUnidad(u, cambios = {}) {
+        return {
+            nombre: u.nombre,
+            modelo: u.modelo || 'Excavadora IoT',
+            numero_serie: u.numero_serie && u.numero_serie !== '—' ? u.numero_serie : null,
+            descripcion: u.descripcion || null,
+            microcontrolador: u.microcontrolador || 'ESP8266',
+            estado_comercial: u.estado_comercial,
+            activo: Number(u.activo ?? 1) === 1,
+            ...cambios
+        };
+    }
+
+    // ------------------------------------------------------------------ pruebas de autorización
+    // Hacen peticiones REALES con la sesión actual y muestran el código HTTP que respondió el servidor.
+    // Usan un comando inexistente: aunque el servidor autorizara (fallo de seguridad), respondería 422
+    // y el vehículo no se movería.
+
+    async _probar(idVehiculo) {
+        try {
+            await api.ejecutarMovimiento(ID_COMANDO_PRUEBA, idVehiculo);
+            return { status: 200, detalle: 'aceptada' };
+        } catch (err) {
+            return { status: err.status || 0, detalle: err.message || 'sin respuesta' };
         }
     }
 
+    _resultadoPrueba(titulo, esperado, r) {
+        const ok = esperado.includes(r.status);
+        const box = document.getElementById('security-test-output');
+        if (!box) return;
+        box.classList.remove('d-none');
+        box.innerHTML = `
+            <div><i class="bi ${ok ? 'bi-shield-check text-success' : 'bi-shield-exclamation text-danger'} me-1"></i>
+                <strong>${esc(titulo)}</strong></div>
+            <div class="small mt-1">Esperado: <b>HTTP ${esperado.join(' o ')}</b> · Respuesta real del servidor: <b>${r.status ? `HTTP ${r.status}` : 'sin conexión'}</b> — ${esc(r.detalle)}</div>
+            <div class="small mt-1 ${ok ? 'text-success' : 'text-danger'}">${ok ? 'CORRECTO: el servidor bloqueó el acceso.' : 'INCORRECTO: revisa la autorización del backend.'} El evento queda en la bitácora de RDS.</div>`;
+        if (this.sesion?.rol === 'ADMIN') this.sincronizarDesdeRds();
+    }
+
+    _pedirRol(rolNecesario, texto) {
+        const box = document.getElementById('security-test-output');
+        if (box) {
+            box.classList.remove('d-none');
+            box.innerHTML = `<i class="bi bi-info-circle text-info me-1"></i> ${esc(texto)} (sesión actual: ${esc(this.sesion?.rol || 'ninguna')}, se requiere: ${esc(rolNecesario)}).`;
+        }
+    }
+
+    async _buscarUnidadAjena(excluir = []) {
+        // Recorre ids cercanos hasta encontrar uno que exista en RDS y no sea de la sesión actual
+        for (let id = 1; id <= 20; id++) {
+            if (excluir.includes(id)) continue;
+            const r = await this._probar(id);
+            if (r.status !== 404) return { id, r };
+        }
+        return null;
+    }
+
+    async _pruebaBola() {
+        if (this.sesion?.rol !== 'USUARIO') {
+            this._pedirRol('USUARIO', 'Inicia sesión como un comprador (por ejemplo Cynthia) para probar el acceso a una unidad ajena');
+            return;
+        }
+        const mias = this.unidadesRds.map((u) => Number(u.id_vehiculo));
+        const hallazgo = await this._buscarUnidadAjena(mias);
+        if (!hallazgo) {
+            this._pedirRol('USUARIO', 'No se encontró otra unidad registrada en RDS para la prueba');
+            return;
+        }
+        this._resultadoPrueba(`BOLA: ${this.sesion.nombre} intenta operar la unidad #${hallazgo.id} (no es suya)`, [403], hallazgo.r);
+    }
+
+    async _pruebaAdminSinSoporte() {
+        if (this.sesion?.rol !== 'ADMIN') {
+            this._pedirRol('ADMIN', 'Inicia sesión como Administrador para esta prueba');
+            return;
+        }
+        const objetivo = this.obtenerTodasLasUnidadesEnriquecidas()
+            .find((u) => u.estado_comercial === 'VENDIDO' && u.id_propietario && !u.soporte_autorizado);
+        if (!objetivo) {
+            this._pedirRol('ADMIN', 'No hay unidades vendidas sin soporte autorizado en RDS para esta prueba');
+            return;
+        }
+        const r = await this._probar(objetivo.id_vehiculo);
+        this._resultadoPrueba(`Privacidad: el Administrador intenta operar la unidad #${objetivo.id_vehiculo} de ${objetivo.nombre_propietario} sin soporte`, [403], r);
+    }
+
+    async _pruebaInvitado() {
+        if (this.sesion?.rol !== 'INVITADO') {
+            this._pedirRol('INVITADO', 'Inicia una prueba como Invitado para verificar que no puede usar unidades de compradores');
+            return;
+        }
+        const reservada = Number(this.state.reservaInvitado?.id_vehiculo);
+        const exhib = this.unidadesRds.map((u) => Number(u.id_vehiculo));
+        const hallazgo = await this._buscarUnidadAjena([reservada, ...exhib]);
+        if (!hallazgo) {
+            this._pedirRol('INVITADO', 'No se encontró una unidad privada en RDS para la prueba');
+            return;
+        }
+        this._resultadoPrueba(`Invitado intenta operar la unidad #${hallazgo.id} (no es de exhibición)`, [403], hallazgo.r);
+    }
+
+    // ------------------------------------------------------------------ formularios
+
     _bindForms() {
-        // 0. Formulario de Inicio de Sesión Real (sin contraseñas en código)
-        const formLogin = document.getElementById('form-auth-login');
-        if (formLogin) {
-            formLogin.addEventListener('submit', async (e) => {
+        const enviar = (idForm, fn) => {
+            const form = document.getElementById(idForm);
+            if (!form) return;
+            form.addEventListener('submit', async (e) => {
                 e.preventDefault();
-                const email = document.getElementById('auth-login-email').value.trim();
-                const password = document.getElementById('auth-login-password').value;
-                if (!email || !password) return;
-                try {
-                    await this.iniciarSesionConCredenciales(email, password);
-                    formLogin.reset();
-                } catch (err) {
-                    ui.playSound('cancel');
-                    ui.showFeedback(err.message || 'Credenciales inválidas', 'danger', 3500);
-                }
+                const boton = form.querySelector('[type="submit"]');
+                if (boton) boton.disabled = true;
+                try { await fn(form); } finally { if (boton) boton.disabled = false; }
             });
-        }
+        };
+        const valor = (id) => document.getElementById(id)?.value?.trim() || '';
 
-        // 0.b Formulario de Acceso Invitado Temporal
-        const formGuest = document.getElementById('form-auth-guest');
-        if (formGuest) {
-            formGuest.addEventListener('submit', async (e) => {
-                e.preventDefault();
-                const nombreVis = document.getElementById('guest-login-name')?.value?.trim() || 'Visitante Showroom';
-                try {
-                    await this.iniciarSesionInvitadoReal(nombreVis);
-                } catch (_) {
-                    await this.cambiarPerfilRapido('INVITADO');
-                }
-            });
-        }
+        enviar('form-auth-login', async (form) => {
+            const email = valor('auth-login-email');
+            const password = document.getElementById('auth-login-password')?.value || '';
+            if (!email || !password) return;
+            try {
+                await this.iniciarSesionConCredenciales(email, password);
+                form.reset();
+            } catch (err) {
+                ui.playSound('cancel');
+                ui.showFeedback(err.status ? `${err.status}: ${err.message}` : 'Sin conexión con AWS', 'danger', 4000);
+            }
+        });
 
-        // 1. Alta de Modelo Comercial
-        const formModelo = document.getElementById('form-admin-modelo');
-        if (formModelo) {
-            formModelo.addEventListener('submit', async (e) => {
-                e.preventDefault();
-                const codigo = document.getElementById('mod-form-codigo').value.trim().toUpperCase();
-                const nombre = document.getElementById('mod-form-nombre').value.trim();
-                const micro = document.getElementById('mod-form-micro').value.trim() || 'ESP8266';
-                const brazo = document.getElementById('mod-form-brazo').checked;
-                if (!codigo || !nombre) return;
+        enviar('form-auth-guest', async () => {
+            try {
+                await this.iniciarSesionInvitadoReal(valor('guest-login-name') || 'Visitante Showroom');
+            } catch (err) {
+                ui.playSound('cancel');
+                ui.showFeedback(err.status ? `${err.status}: ${err.message}` : 'Sin conexión con AWS: no se pudo iniciar la prueba', 'danger', 4500);
+            }
+        });
 
-                try {
-                    await api.crearModeloComercial({
-                        codigo_modelo: codigo,
-                        nombre,
-                        descripcion: 'Modelo comercial registrado desde Administración',
-                        microcontrolador_default: micro,
-                        tiene_brazo: brazo,
-                        tiene_motores_giro: true
-                    });
-                    await this.sincronizarDesdeRds();
-                } catch (_) {
-                    const nextId = Math.max(0, ...this.state.modelos.map(m => Number(m.id_modelo) || 0)) + 1;
-                    this.state.modelos.push({
-                        id_modelo: nextId,
-                        codigo_modelo: codigo,
-                        nombre,
-                        descripcion: 'Modelo comercial registrado desde Administración',
-                        microcontrolador_default: micro,
-                        tiene_brazo: brazo,
-                        tiene_motores_giro: true
-                    });
-                    this._guardarEstado();
-                    this.renderizarTodo();
-                }
-                formModelo.reset();
-                ui.showFeedback(`Modelo comercial ${codigo} registrado`, 'success');
-            });
-        }
+        enviar('form-admin-modelo', async (form) => {
+            const codigo = valor('mod-form-codigo').toUpperCase();
+            const nombre = valor('mod-form-nombre');
+            if (!codigo || !nombre) return;
+            const ok = await this._ejecutar(() => api.crearModeloComercial({
+                codigo_modelo: codigo, nombre, descripcion: 'Modelo comercial registrado desde Administración',
+                microcontrolador_default: valor('mod-form-micro') || 'ESP8266',
+                tiene_brazo: document.getElementById('mod-form-brazo').checked, tiene_motores_giro: true
+            }), `Modelo ${codigo} registrado en RDS`);
+            if (ok !== undefined) form.reset();
+        });
 
-        // 2. Alta de Unidad Física en RDS
-        const formUnidad = document.getElementById('form-admin-unidad');
-        if (formUnidad) {
-            formUnidad.addEventListener('submit', async (e) => {
-                e.preventDefault();
-                const nombre = document.getElementById('unit-form-nombre').value.trim();
-                const serie = document.getElementById('unit-form-serie').value.trim().toUpperCase();
-                const idModelo = Number(document.getElementById('unit-form-modelo').value) || 1;
-                const estadoCom = document.getElementById('unit-form-estado').value || 'DISPONIBLE';
-                const modeloObj = this.state.modelos.find(m => Number(m.id_modelo) === idModelo) || this.state.modelos[0];
-                if (!nombre || !serie) return;
+        enviar('form-admin-unidad', async (form) => {
+            const nombre = valor('unit-form-nombre');
+            const serie = valor('unit-form-serie').toUpperCase();
+            const idModelo = Number(valor('unit-form-modelo'));
+            const estado = valor('unit-form-estado') || 'DISPONIBLE';
+            const modeloObj = this.state.modelos.find((m) => Number(m.id_modelo) === idModelo);
+            if (!nombre || !serie || !modeloObj) {
+                ui.showFeedback('Completa nombre, serie y un modelo activo', 'warning');
+                return;
+            }
+            const ok = await this._ejecutar(() => api.crearUnidadAdmin({
+                nombre, id_modelo: idModelo, modelo: modeloObj.nombre, numero_serie: serie,
+                microcontrolador: modeloObj.microcontrolador_default || 'ESP8266', estado_comercial: estado
+            }), `Unidad '${nombre}' (${serie}) registrada en RDS`);
+            if (ok !== undefined) form.reset();
+        });
 
-                try {
-                    await api.crearUnidadAdmin({
-                        nombre,
-                        id_modelo: idModelo,
-                        modelo: modeloObj.nombre,
-                        numero_serie: serie,
-                        descripcion: `Serie: ${serie} · Estado: ${estadoCom}`,
-                        microcontrolador: modeloObj.microcontrolador_default || 'ESP8266',
-                        estado_comercial: estadoCom
-                    });
-                    await this.sincronizarDesdeRds();
-                } catch (_) {
-                    const nextId = Math.max(0, ...this.unidadesRds.map(u => Number(u.id_vehiculo) || 0)) + 1;
-                    const nueva = {
-                        id_vehiculo: nextId,
-                        nombre,
-                        id_modelo: idModelo,
-                        modelo: modeloObj.nombre,
-                        numero_serie: serie,
-                        descripcion: `Serie: ${serie} · Estado: ${estadoCom}`,
-                        microcontrolador: modeloObj.microcontrolador_default || 'ESP8266',
-                        estado_comercial: estadoCom,
-                        activo: true
-                    };
-                    this.unidadesRds.push(nueva);
-                    this.state.metaUnidades[nextId] = {
-                        id_vehiculo: nextId,
-                        nombre,
-                        numero_serie: serie,
-                        id_modelo: idModelo,
-                        codigo_modelo: modeloObj.codigo_modelo,
-                        modelo_comercial: modeloObj.nombre,
-                        microcontrolador: nueva.microcontrolador,
-                        estado_comercial: estadoCom,
-                        id_propietario: null,
-                        nombre_propietario: null,
-                        email_propietario: null,
-                        soporte_autorizado: false,
-                        activo: true
-                    };
-                    this._guardarEstado();
-                    this.renderizarTodo();
-                }
-                formUnidad.reset();
-                ui.showFeedback(`Unidad '${nombre}' (${serie}) registrada`, 'success');
-            });
-        }
+        enviar('form-admin-cliente', async (form) => {
+            const nombre = valor('cli-form-nombre');
+            const email = valor('cli-form-email').toLowerCase();
+            const password = document.getElementById('cli-form-pass')?.value || '';
+            if (!nombre || !email || password.length < 8) {
+                ui.showFeedback('La contraseña inicial debe tener al menos 8 caracteres', 'warning');
+                return;
+            }
+            const ok = await this._ejecutar(() => api.registrarCliente({ nombre, email, password }), `Cliente ${nombre} registrado en RDS`);
+            if (ok !== undefined) form.reset();
+        });
 
-        // 3. Alta de Cliente Comprador en RDS
-        const formCliente = document.getElementById('form-admin-cliente');
-        if (formCliente) {
-            formCliente.addEventListener('submit', async (e) => {
-                e.preventDefault();
-                const nombre = document.getElementById('cli-form-nombre').value.trim();
-                const email = document.getElementById('cli-form-email').value.trim().toLowerCase();
-                const password = document.getElementById('cli-form-pass').value;
-                if (!nombre || !email || !password) return;
+        enviar('form-admin-asignacion', async () => {
+            const idVehiculo = Number(valor('asig-form-vehiculo'));
+            const idUsuario = Number(valor('asig-form-cliente'));
+            if (!idVehiculo || !idUsuario) return;
+            await this._ejecutar(() => api.asignarUnidad({ id_vehiculo: idVehiculo, id_usuario: idUsuario }), `Unidad #${idVehiculo} asignada`);
+        });
 
-                try {
-                    await api.registrarCliente({ nombre, email, password });
-                    await this.sincronizarDesdeRds();
-                } catch (_) {
-                    const nextId = Math.max(10, ...(this.state.clientes || []).map(c => Number(c.id_usuario) || 0)) + 1;
-                    if (!this.state.clientes) this.state.clientes = [];
-                    this.state.clientes.push({
-                        id_usuario: nextId,
-                        nombre,
-                        email,
-                        rol: 'USUARIO',
-                        unidades: ''
-                    });
-                    this._guardarEstado();
-                    this.renderizarTodo();
-                }
-                formCliente.reset();
-                ui.showFeedback(`Cliente ${nombre} registrado`, 'success');
-            });
-        }
+        enviar('form-editor-nueva-demo', async (form) => {
+            const nombre = valor('demo-form-nombre');
+            if (!nombre) return;
+            const vid = CONFIG.VEHICULO_ID;
+            const creada = await this._ejecutar(() => api.crearDemo({ id_vehiculo: vid, nombre, descripcion: valor('demo-form-desc') || null }),
+                `Demo '${nombre}' guardada en RDS`, { recargar: false });
+            if (creada === undefined) return;
+            if (creada?.id_demo) this.idDemoSeleccionada = creada.id_demo;
+            form.reset();
+            await this.cargarDemosParaEditor(vid);
+            if (this.onUnitChanged) await this.onUnitChanged(vid);
+        });
 
-        // 4. Asignación de Unidad Física a Cliente Comprador en RDS
-        const formAsig = document.getElementById('form-admin-asignacion');
-        if (formAsig) {
-            formAsig.addEventListener('submit', async (e) => {
-                e.preventDefault();
-                const idVehiculo = Number(document.getElementById('asig-form-vehiculo').value);
-                const idUsuario = Number(document.getElementById('asig-form-cliente').value);
-                if (!idVehiculo || !idUsuario) return;
-                try {
-                    await api.asignarUnidad({ id_vehiculo: idVehiculo, id_usuario: idUsuario });
-                    await this.sincronizarDesdeRds();
-                } catch (_) {
-                    const cli = (this.state.clientes || []).find(c => Number(c.id_usuario) === idUsuario);
-                    if (!this.state.metaUnidades[idVehiculo]) this.state.metaUnidades[idVehiculo] = {};
-                    this.state.metaUnidades[idVehiculo].estado_comercial = 'VENDIDO';
-                    this.state.metaUnidades[idVehiculo].id_propietario = idUsuario;
-                    this.state.metaUnidades[idVehiculo].nombre_propietario = cli?.nombre || `Cliente #${idUsuario}`;
-                    this.state.metaUnidades[idVehiculo].email_propietario = cli?.email || '';
-                    this.state.metaUnidades[idVehiculo].fecha_asignacion = new Date().toISOString().slice(0, 10);
-                    this._guardarEstado();
-                    this.renderizarTodo();
-                }
-                ui.showFeedback(`Unidad #${idVehiculo} asignada correctamente`, 'success');
-            });
-        }
-
-        // 5. Crear nueva Secuencia DEMO en RDS
-        const formDemo = document.getElementById('form-editor-nueva-demo');
-        if (formDemo) {
-            formDemo.addEventListener('submit', async (e) => {
-                e.preventDefault();
-                const nombre = document.getElementById('demo-form-nombre').value.trim();
-                const desc = document.getElementById('demo-form-desc').value.trim();
-                if (!nombre) return;
-
-                const vid = CONFIG.VEHICULO_ID || 1;
-                try {
-                    const creada = await api.crearDemo({
-                        id_vehiculo: vid,
-                        nombre,
-                        descripcion: desc || `Creada por ${this.sesion?.nombre || 'Usuario'}`
-                    });
-                    if (creada?.id_demo) {
-                        this.idDemoSeleccionada = creada.id_demo;
-                    }
-                } catch (_) {
-                    const lista = this._obtenerListaDemosMemoria(vid);
-                    const nuevoId = Date.now() % 100000;
-                    lista.push({
-                        id_demo: nuevoId,
-                        id_vehiculo: vid,
-                        nombre,
-                        descripcion: desc || `Creada por ${this.sesion?.nombre || 'Usuario'}`,
-                        tipo_demo: this.sesion?.rol === 'ADMIN' ? 'EMPRESA' : 'PRIVADA',
-                        pasos: []
-                    });
-                    this.idDemoSeleccionada = nuevoId;
-                    this._guardarEstado();
-                }
-                formDemo.reset();
-                await this.cargarDemosParaEditor(vid);
-                if (this.onUnitChanged) await this.onUnitChanged(vid);
-                ui.showFeedback(`Demo '${nombre}' guardada`, 'success');
-            });
-        }
-
-        // 6. Agregar Paso Ordenado a la DEMO seleccionada en RDS
-        const formPaso = document.getElementById('form-editor-agregar-paso');
-        if (formPaso) {
-            formPaso.addEventListener('submit', async (e) => {
-                e.preventDefault();
-                if (!this.idDemoSeleccionada) {
-                    ui.showFeedback('Selecciona o crea primero una secuencia DEMO', 'warning');
-                    return;
-                }
-                const idComando = Number(document.getElementById('step-form-comando').value);
-                const duracionMs = Number(document.getElementById('step-form-duracion').value) || 1500;
-                const pausaMs = Number(document.getElementById('step-form-pausa').value) || 400;
-
-                if (duracionMs < 100 || duracionMs > 10000) {
-                    ui.showFeedback('Por seguridad física, la duración debe estar entre 100 ms y 10,000 ms', 'danger');
-                    return;
-                }
-
-                const siguienteOrden = (this.movimientosDemoActual.length > 0)
-                    ? Math.max(...this.movimientosDemoActual.map(m => Number(m.orden) || 0)) + 1
-                    : 1;
-
-                try {
-                    await api.agregarMovimientoDemo(this.idDemoSeleccionada, {
-                        id_comando: idComando,
-                        orden: siguienteOrden,
-                        duracion_ms: duracionMs,
-                        pausa_ms: pausaMs
-                    });
-                } catch (_) {
-                    const cmdInfo = COMANDOS_BASE_MEMORIA.find(c => Number(c.id_comando) === idComando);
-                    const demoObj = this.demosUnidadEditor.find(d => Number(d.id_demo) === Number(this.idDemoSeleccionada));
-                    if (demoObj) {
-                        if (!Array.isArray(demoObj.pasos)) demoObj.pasos = [];
-                        demoObj.pasos.push({
-                            id_demo_movimiento: Date.now() % 100000,
-                            id_comando: idComando,
-                            comando: cmdInfo?.nombre || `Comando #${idComando}`,
-                            orden: siguienteOrden,
-                            duracion_ms: duracionMs,
-                            pausa_ms: pausaMs
-                        });
-                        this._guardarEstado();
-                    }
-                }
-                ui.playSound('start');
-                ui.showFeedback(`Paso #${siguienteOrden} agregado`, 'success', 2000);
-                await this.cargarPasosDeDemoSeleccionada(this.idDemoSeleccionada);
-            });
-        }
+        enviar('form-editor-agregar-paso', async () => {
+            if (!this.idDemoSeleccionada) {
+                ui.showFeedback('Selecciona o crea primero una secuencia DEMO', 'warning');
+                return;
+            }
+            const idComando = Number(valor('step-form-comando'));
+            const duracion = Number(valor('step-form-duracion'));
+            const pausa = Number(valor('step-form-pausa'));
+            if (!(duracion >= 100 && duracion <= 10000) || !(pausa >= 0 && pausa <= 5000)) {
+                ui.showFeedback('Duración: 100–10,000 ms · Pausa: 0–5,000 ms', 'danger');
+                return;
+            }
+            const orden = this.movimientosDemoActual.length ? Math.max(...this.movimientosDemoActual.map((m) => Number(m.orden) || 0)) + 1 : 1;
+            const ok = await this._ejecutar(() => api.agregarMovimientoDemo(this.idDemoSeleccionada, { id_comando: idComando, orden, duracion_ms: duracion, pausa_ms: pausa }),
+                `Paso #${orden} agregado`, { recargar: false });
+            if (ok !== undefined) ui.playSound('start');
+            await this.cargarPasosDeDemoSeleccionada(this.idDemoSeleccionada);
+        });
     }
 }
 

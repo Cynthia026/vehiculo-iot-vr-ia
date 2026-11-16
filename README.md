@@ -19,6 +19,16 @@ Aplicación web integral (**SPA + PWA**) que unifica en un solo proyecto el cont
 
 ---
 
+## 🔐 Administración 4.3: acceso y seguridad
+
+- **Sin sesión** sólo se ve el catálogo público y la unidad de exhibición; para controlar hay que **iniciar sesión** (Administrador o Usuario, con contraseña) o pedir una **prueba de Invitado de 3 min**.
+- La pestaña **Administración** muestra primero el inicio de sesión. Después, cada rol ve sólo lo suyo: el **Administrador** el inventario, modelos, clientes, asignaciones, comandos, bitácora y demos de la empresa; el **Usuario** *Mis vehículos*, su consentimiento de soporte y sus demos privadas; el **Invitado** su reserva con cuenta regresiva.
+- **Todos los datos vienen de Amazon RDS.** Si AWS no responde o rechaza la petición, la página muestra *Sin datos* o el código real (401/403/409/422); nunca guarda cambios simulados.
+- Los botones de **Pruebas de autorización** hacen peticiones reales con la sesión actual y muestran el código HTTP que respondió el servidor (usan un comando inexistente, así que el vehículo nunca se mueve).
+- La seguridad la aplica el backend (RBAC, propiedad por unidad, soporte con consentimiento, límite de intentos, invalidación de sesión y auditoría). Reglas, diagrama ER, migraciones y matriz de pruebas P01–P17: ver el README de la API (`api-vehiculo-iot`).
+
+---
+
 ## 🎤 Comandos de Voz Aceptados (`ControlVoz` y `AsistenteIA`)
 
 El reconocimiento de voz funciona en español (`es-MX` / `es-ES`). Puedes especificar una duración entre **0.5 y 10 segundos** (por defecto cada movimiento dura **2 segundos**, ej. *"avanza 4 segundos"*, *"sube el brazo dos segundos"*).

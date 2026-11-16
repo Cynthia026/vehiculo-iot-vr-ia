@@ -263,6 +263,22 @@ class ApiClient {
         return this.requestJson('DELETE', `/api/admin/asignaciones/${idVehiculo}?nuevo_estado=${nuevoEstado}`);
     }
 
+    async actualizarUnidadAdmin(idVehiculo, datos) {
+        return this.requestJson('PUT', `/api/admin/unidades/${idVehiculo}`, datos);
+    }
+
+    async darDeBajaUnidad(idVehiculo) {
+        return this.requestJson('DELETE', `/api/vehiculos/${idVehiculo}`);
+    }
+
+    async actualizarModelo(idModelo, datos) {
+        return this.requestJson('PUT', `/api/admin/modelos/${idModelo}`, datos);
+    }
+
+    async actualizarCliente(idUsuario, datos) {
+        return this.requestJson('PUT', `/api/admin/clientes/${idUsuario}`, datos);
+    }
+
     async obtenerMisVehiculos() {
         return this.get('/api/mis-vehiculos');
     }

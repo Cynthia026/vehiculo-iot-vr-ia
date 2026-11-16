@@ -1,9 +1,9 @@
 // assets/js/app.js
-import { api } from './api.js?v=29';
+import { api } from './api.js?v=36';
 import { wsManager } from './websocket.js?v=29';
 import { ui, normalizar } from './ui.js?v=29';
 import { CONFIG } from './config.js?v=29';
-import { adminManager } from './admin.js?v=29';
+import { adminManager } from './admin.js?v=36';
 import { ControlVoz, ControlGestos, ControlGiroscopio } from './control-ia.js?v=35';
 import { AsistenteIA, describirPaso } from './asistente-ia.js?v=29';
 
@@ -970,6 +970,16 @@ async function cargarCatalogos() {
     } catch (error) {
         console.error('Error cargando catálogos:', error);
         catalogoComandos = [];
+        if (error.status) {
+            // AWS sí respondió pero rechazó la petición (sin sesión / sin permiso sobre la unidad):
+            // NO se simula el control; el servidor decide y la página lo dice.
+            cancelarDemoSimulada(false);
+            modoSimulacion = false;
+            ui.setOffline(false);
+            ui.renderComandos([], ejecutarComando);
+            ui.renderDemos([]);
+            return;
+        }
         if (primerFallo) {
             ui.showFeedback('Sin conexión con AWS · Modo simulación activo', 'warning', 4000);
             primerFallo = false;
